@@ -1,6 +1,6 @@
 import type { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
-import type { EntityId, SkillId } from '../types/branded';
+import { brandEntityId, type EntityId, type SkillId } from '../types/branded';
 import type { GameSystem, PomoEnvironment } from './environment';
 import type { WorldPosition, Vector2 } from '../domain/core';
 import type { SkillTarget, GameEvent, EffectApplicationIntent, AbilityIntent } from '../domain/events';
@@ -420,7 +420,7 @@ function handleProjectileDelivery(
 
   if (targets.length > 0) {
     for (const targetId of targets) {
-      const projectileId = crypto.randomUUID() as EntityId;
+      const projectileId = brandEntityId(crypto.randomUUID());
       const liveProjectile: import('../domain/projectile').LiveProjectile = {
         Caster: casterId,
         Target: { kind: 'EntityTarget', entity: targetId },
@@ -434,7 +434,7 @@ function handleProjectileDelivery(
     console.debug('[Combat] handleProjectileDelivery fallback, target.kind:', target.kind);
     switch (target.kind) {
       case 'TargetEntity': {
-        const projectileId = crypto.randomUUID() as EntityId;
+        const projectileId = brandEntityId(crypto.randomUUID());
         console.debug('[Combat] Creating EntityTarget projectile', projectileId);
         const liveProjectile: import('../domain/projectile').LiveProjectile = {
           Caster: casterId,
@@ -446,7 +446,7 @@ function handleProjectileDelivery(
         break;
       }
       case 'TargetPosition': {
-        const projectileId = crypto.randomUUID() as EntityId;
+        const projectileId = brandEntityId(crypto.randomUUID());
         console.debug('[Combat] Creating PositionTarget projectile', projectileId, 'pos:', target.position);
         const liveProjectile: import('../domain/projectile').LiveProjectile = {
           Caster: casterId,
@@ -674,7 +674,7 @@ function handleChargeCompleted(env: PomoEnvironment, completed: import('../domai
   // Charged projectile delivery
   // ... (simplified for now; full orbital logic omitted for brevity but can be added)
   // Fallback to single projectile
-  const projectileId = crypto.randomUUID() as EntityId;
+  const projectileId = brandEntityId(crypto.randomUUID());
   const baseTarget: import('../domain/projectile').ProjectileTarget =
     completed.Target.kind === 'TargetEntity'
       ? { kind: 'EntityTarget', entity: completed.Target.entity }

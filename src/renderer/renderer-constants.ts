@@ -1,5 +1,7 @@
-export const PLAYER_ENTITY_ID = "player-1" as any;
-export const PLAYER_SCENARIO_ID = "default-scenario" as any;
+import { brandEntityId, brandScenarioId } from "../kipo-engine/types/branded";
+
+export const PLAYER_ENTITY_ID = brandEntityId("player-1");
+export const PLAYER_SCENARIO_ID = brandScenarioId("default-scenario");
 
 export const SKILL_SLOT_MAP: Record<number, number> = {
   1: 1, // Melee Attack

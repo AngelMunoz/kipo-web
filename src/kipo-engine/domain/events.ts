@@ -313,3 +313,13 @@ export type SlotProcessing =
 export interface InputMap {
   bindings: Map<string, GameAction>; // key -> action
 }
+
+export const USE_SLOT_ACTIONS: readonly GameAction[] = [
+  'UseSlot1', 'UseSlot2', 'UseSlot3', 'UseSlot4',
+  'UseSlot5', 'UseSlot6', 'UseSlot7', 'UseSlot8',
+];
+
+export const SET_ACTION_SET_ACTIONS: readonly GameAction[] = [
+  'SetActionSet1', 'SetActionSet2', 'SetActionSet3', 'SetActionSet4',
+  'SetActionSet5', 'SetActionSet6', 'SetActionSet7', 'SetActionSet8',
+];

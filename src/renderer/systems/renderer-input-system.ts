@@ -17,6 +17,11 @@ export function createInputSystem(scene: GameplayScene): InputSystem {
   const kb = scene.input.keyboard!;
   const cursors = kb.createCursorKeys();
 
+  function getKeys(keysList: string): Record<string, Phaser.Input.Keyboard.Key> {
+    // SAFETY: Phaser's addKeys returns a loosely-typed object; we coerce it for safe property access.
+    return kb.addKeys(keysList) as Record<string, Phaser.Input.Keyboard.Key>;
+  }
+
   // Movement — arrow keys matching F# InputMapping.fs
   keys.set("MoveUp", cursors.up!);
   keys.set("MoveDown", cursors.down!);
@@ -24,7 +29,7 @@ export function createInputSystem(scene: GameplayScene): InputSystem {
   keys.set("MoveRight", cursors.right!);
 
   // Skill slots — QWER/ASDF matching F# InputMapping.fs
-  const skillKeys = kb.addKeys("Q,W,E,R,A,S,D,F") as Record<string, Phaser.Input.Keyboard.Key>;
+  const skillKeys = getKeys("Q,W,E,R,A,S,D,F");
   keys.set("UseSlot1", skillKeys.Q!);
   keys.set("UseSlot2", skillKeys.W!);
   keys.set("UseSlot3", skillKeys.E!);
@@ -35,7 +40,7 @@ export function createInputSystem(scene: GameplayScene): InputSystem {
   keys.set("UseSlot8", skillKeys.F!);
 
   // Action set switching — 1-8 matching F# InputMapping.fs
-  const setKeys = kb.addKeys("ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT") as Record<string, Phaser.Input.Keyboard.Key>;
+  const setKeys = getKeys("ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT");
   keys.set("SetActionSet1", setKeys.ONE!);
   keys.set("SetActionSet2", setKeys.TWO!);
   keys.set("SetActionSet3", setKeys.THREE!);
@@ -46,7 +51,7 @@ export function createInputSystem(scene: GameplayScene): InputSystem {
   keys.set("SetActionSet8", setKeys.EIGHT!);
 
   // UI toggles — ZXCV matching F# InputMapping.fs
-  const uiKeys = kb.addKeys("Z,X,C,V") as Record<string, Phaser.Input.Keyboard.Key>;
+  const uiKeys = getKeys("Z,X,C,V");
   keys.set("ToggleJournal", uiKeys.Z!);
   keys.set("ToggleInventory", uiKeys.X!);
   keys.set("ToggleAbilities", uiKeys.C!);
@@ -65,8 +70,8 @@ export function createInputSystem(scene: GameplayScene): InputSystem {
         intent: {
           kind: "SlotActivated",
           slot: {
-            Slot: "Cancel" as GameAction,
-            CasterId: "player-1" as any,
+            Slot: "Cancel",
+            CasterId: PLAYER_ENTITY_ID,
           },
         },
       });

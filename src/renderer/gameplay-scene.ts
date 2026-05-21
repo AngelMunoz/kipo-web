@@ -10,7 +10,8 @@ import { createVFXSystem, type VFXSystem } from "./systems/renderer-vfx-system";
 import { createParticleSystem, type ParticleSystem } from "./systems/renderer-particle-system";
 import type { ParticleStore } from "./stores/particle-store";
 import { PLAYER_ENTITY_ID, PLAYER_SCENARIO_ID } from "./renderer-constants";
-import type { GameAction } from "../kipo-engine/domain/events";
+import { USE_SLOT_ACTIONS, SET_ACTION_SET_ACTIONS } from "../kipo-engine/domain/events";
+import { brandEntityId, brandAiArchetypeId } from "../kipo-engine/types/branded";
 
 export class GameplayScene extends Phaser.Scene {
   private world: MutableWorld | null = null;
@@ -109,7 +110,7 @@ export class GameplayScene extends Phaser.Scene {
     this.entitySystem = createEntitySystem(this);
     this.projectileSystem = createProjectileSystem(this, (entityId, vfxId, x, y) => {
       if (!this.particleSystem || !vfxId) return;
-      this.particleSystem.spawnEffect(vfxId, { X: x, Y: 0, Z: y }, entityId as unknown as string);
+      this.particleSystem.spawnEffect(vfxId, { X: x, Y: 0, Z: y }, entityId);
     });
     this.vfxSystem = createVFXSystem(this);
 
@@ -143,8 +144,7 @@ export class GameplayScene extends Phaser.Scene {
 
     // ── 2. Poll input → skill slots / action sets ──
     const input = this.inputSystem;
-    for (let slot = 1; slot <= 8; slot++) {
-      const action = `UseSlot${slot}` as GameAction;
+    for (const action of USE_SLOT_ACTIONS) {
       if (input.justDown(action)) {
         this.eventBus.publish({
           kind: "Intent",
@@ -157,10 +157,9 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     // Action set switching (1-8 keys, matching F# InputMapping.fs)
-    for (let set = 1; set <= 8; set++) {
-      const action = `SetActionSet${set}` as GameAction;
+    for (const action of SET_ACTION_SET_ACTIONS) {
       if (input.justDown(action)) {
-        console.debug('[GameplayScene] Switching to action set', set);
+        console.debug('[GameplayScene] Switching to action set', action);
         this.eventBus.publish({
           kind: "Intent",
           intent: {
@@ -185,7 +184,7 @@ export class GameplayScene extends Phaser.Scene {
 
     if (this.particleSystem) {
       this.particleSystem.update(dt, (id) => {
-        const pos = this.world!.Positions.get(id as any);
+        const pos = this.world!.Positions.get(brandEntityId(id));
         return pos ? { X: pos.X, Y: pos.Y, Z: pos.Z } : undefined;
       });
       this.particleSystem.render();
@@ -256,12 +255,12 @@ export class GameplayScene extends Phaser.Scene {
         spawning: {
           kind: "SpawnEntity",
           spawn: {
-            EntityId: `target-${i}` as any,
+            EntityId: brandEntityId(`target-${i}`),
             ScenarioId: PLAYER_SCENARIO_ID,
             Type: {
               kind: "Faction",
               info: {
-                ArchetypeId: 1 as any,
+                ArchetypeId: brandAiArchetypeId(1),
                 EntityDefinitionKey: undefined,
                 MapOverride: undefined,
                 Faction: "Enemy",
@@ -351,7 +350,7 @@ export class GameplayScene extends Phaser.Scene {
         X: targetPos.X,
         Y: 0,
         Z: targetPos.Z,
-      }, effectApp.TargetEntity as unknown as string);
+      }, effectApp.TargetEntity);
 
       if (spawnedId) {
         this.effectVfxMap.set(key, spawnedId);
@@ -365,7 +364,7 @@ export class GameplayScene extends Phaser.Scene {
 
     for (const [key, vfxId] of this.effectVfxMap) {
       const [entityId, effectName] = key.split('::', 2);
-      const effects = activeEffects.get(entityId as any);
+      const effects = activeEffects.get(brandEntityId(entityId));
       const stillActive = effects?.some((e) => e.SourceEffect.Name === effectName);
       if (!stillActive) {
         this.particleSystem.removeEffect(vfxId);

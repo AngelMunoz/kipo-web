@@ -107,12 +107,16 @@ function applyEffect(
 
 // --- Ticking Logic ---
 
+type IntervalEvent =
+  | { kind: 'Damage'; intent: EffectDamageIntent }
+  | { kind: 'Resource'; intent: EffectResourceIntent };
+
 function generateIntervalEvents(
   totalGameTime: number,
   previousTime: number,
   effect: ActiveEffect,
   interval: number
-): Array<{ kind: 'Damage' | 'Resource'; intent: EffectDamageIntent | EffectResourceIntent }> {
+): IntervalEvent[] {
   if (interval <= 0) return [];
 
   const startTime = effect.StartTime;
@@ -126,7 +130,7 @@ function generateIntervalEvents(
 
   if (tickCount <= 0) return [];
 
-  const events: Array<{ kind: 'Damage' | 'Resource'; intent: EffectDamageIntent | EffectResourceIntent }> = [];
+  const events: IntervalEvent[] = [];
 
   for (let i = 0; i < tickCount; i++) {
     switch (effect.SourceEffect.Kind) {
@@ -210,8 +214,8 @@ function processLoopEffects(
                 kind: 'Intent',
                 intent:
                   tick.kind === 'Damage'
-                    ? { kind: 'EffectDamage', effectDmg: tick.intent as EffectDamageIntent }
-                    : { kind: 'EffectResource', effectRes: tick.intent as EffectResourceIntent },
+                    ? { kind: 'EffectDamage', effectDmg: tick.intent }
+                    : { kind: 'EffectResource', effectRes: tick.intent },
               },
             });
           }
@@ -242,8 +246,8 @@ function processPermanentLoopEffects(
               kind: 'Intent',
               intent:
                 tick.kind === 'Damage'
-                  ? { kind: 'EffectDamage', effectDmg: tick.intent as EffectDamageIntent }
-                  : { kind: 'EffectResource', effectRes: tick.intent as EffectResourceIntent },
+                  ? { kind: 'EffectDamage', effectDmg: tick.intent }
+                  : { kind: 'EffectResource', effectRes: tick.intent },
             },
           });
         }
@@ -340,7 +344,8 @@ export function createEffectApplicationSystem(env: PomoEnvironment): EffectAppli
           console.debug('[EffectProc] Loop effect expired:', res.entityId, res.effectId);
           env.core.stateWrite.ExpireEffect(res.entityId, res.effectId);
         } else {
-          console.debug('[EffectProc] DOT tick:', (res.event as any).intent?.kind);
+          const intentKind = res.event.kind === 'Intent' ? res.event.intent.kind : undefined;
+          console.debug('[EffectProc] DOT tick:', intentKind);
           env.core.eventBus.publish(res.event);
         }
       }

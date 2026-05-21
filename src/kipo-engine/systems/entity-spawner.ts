@@ -300,7 +300,7 @@ function finalizeSpawn(env: PomoEnvironment, pending: PendingSpawn) {
       if (!aiEntity) {
         // Try to get first available entity definition
         const allEntities = env.stores.aiEntityStore.all();
-        aiEntity = allEntities[0] as AIEntityDefinition | undefined;
+        aiEntity = allEntities[0] ?? undefined;
       }
 
       // Look up family config

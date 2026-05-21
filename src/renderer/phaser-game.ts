@@ -3,11 +3,11 @@ import type { MutableWorld } from "../kipo-engine/domain/world";
 import type { EntityId } from "../kipo-engine/types/branded";
 import type { PomoEnvironment } from "../kipo-engine/systems/environment";
 import type { GameplayLoop } from "../kipo-engine/gameplay-loop";
-import { brandEntityId, brandSkillId } from "../kipo-engine/types/branded";
-import type { GameAction } from "../kipo-engine/domain/events";
+import { brandEntityId, brandScenarioId, brandSkillId } from "../kipo-engine/types/branded";
+import { USE_SLOT_ACTIONS, type GameAction } from "../kipo-engine/domain/events";
 
 export const PLAYER_ENTITY_ID = brandEntityId("player-1");
-export const PLAYER_SCENARIO_ID = "default-scenario" as any;
+export const PLAYER_SCENARIO_ID = brandScenarioId("default-scenario");
 
 export class GameScene extends Phaser.Scene {
   private world: MutableWorld | null = null;
@@ -77,21 +77,23 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.addKeys("W,A,S,D");
     const numKeys = this.input.keyboard!.addKeys(
       "ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT",
-    ) as Record<string, Phaser.Input.Keyboard.Key>;
+    );
+    // SAFETY: Phaser's addKeys returns a loosely-typed object; we coerce it for safe property access.
+    const typedNumKeys = numKeys as Record<string, Phaser.Input.Keyboard.Key>;
 
     this.keys.set("MoveUp", cursors.up!);
     this.keys.set("MoveDown", cursors.down!);
     this.keys.set("MoveLeft", cursors.left!);
     this.keys.set("MoveRight", cursors.right!);
 
-    this.keys.set("UseSlot1", numKeys.ONE!);
-    this.keys.set("UseSlot2", numKeys.TWO!);
-    this.keys.set("UseSlot3", numKeys.THREE!);
-    this.keys.set("UseSlot4", numKeys.FOUR!);
-    this.keys.set("UseSlot5", numKeys.FIVE!);
-    this.keys.set("UseSlot6", numKeys.SIX!);
-    this.keys.set("UseSlot7", numKeys.SEVEN!);
-    this.keys.set("UseSlot8", numKeys.EIGHT!);
+    this.keys.set("UseSlot1", typedNumKeys.ONE!);
+    this.keys.set("UseSlot2", typedNumKeys.TWO!);
+    this.keys.set("UseSlot3", typedNumKeys.THREE!);
+    this.keys.set("UseSlot4", typedNumKeys.FOUR!);
+    this.keys.set("UseSlot5", typedNumKeys.FIVE!);
+    this.keys.set("UseSlot6", typedNumKeys.SIX!);
+    this.keys.set("UseSlot7", typedNumKeys.SEVEN!);
+    this.keys.set("UseSlot8", typedNumKeys.EIGHT!);
   }
 
   private setupAnimations() {
@@ -204,7 +206,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (let i = 1; i <= 8; i++) {
-      const key = this.keys.get(`UseSlot${i}` as GameAction);
+      const action = USE_SLOT_ACTIONS[i - 1];
+      const key = this.keys.get(action);
       if (key && Phaser.Input.Keyboard.JustDown(key)) {
         this.triggerSkill(i);
       }
@@ -232,12 +235,13 @@ export class GameScene extends Phaser.Scene {
 
     this.playerSprite.play("soldier-attack", true);
 
+    const slotAction = USE_SLOT_ACTIONS[slot - 1];
     this.eventBus.publish({
       kind: "Intent",
       intent: {
         kind: "SlotActivated",
         slot: {
-          Slot: `UseSlot${slot}` as GameAction,
+          Slot: slotAction,
           CasterId: this.playerId,
         },
       },

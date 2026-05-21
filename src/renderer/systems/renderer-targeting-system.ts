@@ -4,6 +4,7 @@ import { filter } from "rxjs/operators";
 import type { GameplayScene } from "../gameplay-scene";
 import type { GameEvent, GameAction } from "../../kipo-engine/domain/events";
 import { PLAYER_ENTITY_ID } from "../renderer-constants";
+import { brandEntityId } from "../../kipo-engine/types/branded";
 
 export interface TargetingSystem {
   isTargeting(): boolean;
@@ -100,7 +101,7 @@ export function createTargetingSystem(scene: GameplayScene): TargetingSystem {
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < closestDist) {
         closestDist = dist;
-        closestId = entityId as unknown as string;
+        closestId = entityId;
       }
     }
 
@@ -124,7 +125,7 @@ export function createTargetingSystem(scene: GameplayScene): TargetingSystem {
           kind: "TargetSelection",
           target: {
             Selector: PLAYER_ENTITY_ID,
-            Selection: { kind: "SelectedEntity", entity: clickedEntity as any },
+            Selection: { kind: "SelectedEntity", entity: brandEntityId(clickedEntity) },
           },
         },
       });

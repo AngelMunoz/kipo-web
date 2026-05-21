@@ -130,7 +130,9 @@ export function createParticleSystem(
         // Shape-based emit zone
         if (cfg.Shape === "Sphere" && cfg.Radius > 0) {
           const circle = new Phaser.Geom.Circle(0, 0, cfg.Radius);
-          emitter.addEmitZone({ type: "random", source: circle.getRandomPoint as any } as any);
+          // SAFETY: Phaser's addEmitZone source type doesn't match getRandomPoint's signature.
+          const emitZone = { type: "random", source: circle.getRandomPoint.bind(circle) } as unknown as Phaser.Types.GameObjects.Particles.ParticleEmitterEdgeZoneConfig;
+          emitter.addEmitZone(emitZone);
         }
 
         // Handle Burst via explode after creation
@@ -176,7 +178,8 @@ export function createParticleSystem(
         effect.isAlive = false;
 
         // For one-shot emitters (Burst only, no Rate), wait for complete
-        const burstOnly = effect.emitters.every((e) => (e as any).frequency === -1);
+        // SAFETY: Phaser's ParticleEmitter types don't expose frequency in this version.
+        const burstOnly = effect.emitters.every((e) => (e as unknown as { frequency: number }).frequency === -1);
 
         if (burstOnly) {
           // Let particles live out their lifespan, then cleanup

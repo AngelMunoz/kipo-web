@@ -7,11 +7,13 @@ export interface ParticleStore {
 
 export async function loadParticleStore(basePath: string): Promise<ParticleStore> {
   const response = await fetch(`${basePath}/Particles.json`);
-  const raw = await response.json() as Record<string, RawParticleEffect[]>;
+  // SAFETY: JSON is loaded from our own content files with a known schema.
+  const raw: unknown = await response.json();
+  const parsed = raw as Record<string, RawParticleEffect[]>;
 
   const map = new Map<string, EmitterConfig[]>();
 
-  for (const [vfxId, emitters] of Object.entries(raw)) {
+  for (const [vfxId, emitters] of Object.entries(parsed)) {
     map.set(vfxId, emitters.map(parseEmitter));
   }
 
