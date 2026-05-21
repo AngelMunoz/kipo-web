@@ -3,14 +3,6 @@ import { brandSkillId } from '../types/branded';
 import type { Skill, ActiveSkill } from '../domain/skill';
 import type { ItemDefinition } from '../domain/item';
 import type { AIArchetype, AIEntityDefinition, AIFamilyConfig, DecisionTree } from '../domain/ai';
-import {
-  SkillMapSchema,
-  ItemMapSchema,
-  AIArchetypeArraySchema,
-  AIEntityMapSchema,
-  AIFamilyMapSchema,
-  DecisionTreeMapSchema,
-} from './serialization';
 
 export interface SkillStore {
   tryFind(id: SkillId): Skill | undefined;
@@ -68,6 +60,15 @@ export async function loadContent(basePath: string): Promise<ContentStores> {
     fetch(`${basePath}/AIFamilies.json`).then((r) => r.json()),
     fetch(`${basePath}/DecisionTrees.json`).then((r) => r.json()),
   ]);
+
+  const {
+    SkillMapSchema,
+    ItemMapSchema,
+    AIArchetypeArraySchema,
+    AIEntityMapSchema,
+    AIFamilyMapSchema,
+    DecisionTreeMapSchema,
+  } = await import('./serialization');
 
   const skillsParsed = SkillMapSchema.parse(skillsJson);
   const itemsParsed = ItemMapSchema.parse(itemsJson);

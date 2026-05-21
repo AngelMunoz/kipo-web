@@ -1,6 +1,4 @@
 import { createSignal, onMount } from 'solid-js';
-import { createGameplayScene } from './renderer/gameplay-scene';
-import { bootstrapGame } from './renderer/bootstrap';
 
 function App() {
   const [gameReady, setGameReady] = createSignal(false);
@@ -14,8 +12,13 @@ function App() {
         return;
       }
 
+      const [{ bootstrapGame }, { createGameplayScene }] = await Promise.all([
+        import('./renderer/bootstrap'),
+        import('./renderer/gameplay-scene'),
+      ]);
+
       const bootstrap = await bootstrapGame();
-      
+
       createGameplayScene(
         gameContainer,
         bootstrap.world,

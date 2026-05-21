@@ -8,12 +8,9 @@ import { loadContent, type ContentStores } from '../kipo-engine/stores/content-s
 import { loadParticleStore, type ParticleStore } from './stores/particle-store';
 import { createGameplayLoop, type GameplayLoop } from '../kipo-engine/gameplay-loop';
 import { createMovementSystem } from '../kipo-engine/systems/movement';
-import { createEntitySpawnerSystem } from '../kipo-engine/systems/entity-spawner';
 import { createAbilityActivationSystem } from '../kipo-engine/systems/ability-activation';
-import { createCombatSystem } from '../kipo-engine/systems/combat';
 import { createTargetingSystem as createEngineTargetingSystem } from '../kipo-engine/systems/targeting';
 import { createProjectileSystem } from '../kipo-engine/systems/projectile';
-import { createEffectApplicationSystem } from '../kipo-engine/systems/effect-application';
 import { createNotificationSystem } from '../kipo-engine/systems/notification';
 import { createResourceManagerSystem } from '../kipo-engine/systems/resource-manager';
 import type { ProjectionService, CameraService } from '../kipo-engine/systems/environment';
@@ -88,15 +85,26 @@ export async function bootstrapGame(): Promise<GameBootstrap> {
     };
 
     const abilityActivation = createAbilityActivationSystem(env);
-    const combat = createCombatSystem(env);
     createEngineTargetingSystem(env);
 
     const movement = createMovementSystem(env);
     const projectile = createProjectileSystem(env);
-    const entitySpawner = createEntitySpawnerSystem(env);
-    const effectApp = createEffectApplicationSystem(env);
     const notification = createNotificationSystem(env);
     const resourceManager = createResourceManagerSystem(env);
+
+    const [
+        { createCombatSystem },
+        { createEntitySpawnerSystem },
+        { createEffectApplicationSystem },
+    ] = await Promise.all([
+        import('../kipo-engine/systems/combat'),
+        import('../kipo-engine/systems/entity-spawner'),
+        import('../kipo-engine/systems/effect-application'),
+    ]);
+
+    const combat = createCombatSystem(env);
+    const entitySpawner = createEntitySpawnerSystem(env);
+    const effectApp = createEffectApplicationSystem(env);
 
     const inventorySystem = {
         update: () => {},
