@@ -1,13 +1,14 @@
-import type { PomoEnvironment } from './systems/environment';
-import type { EffectApplicationSystem } from './systems/effect-application';
-import type { ProjectileSystem } from './systems/projectile';
-import type { MovementSystem } from './systems/movement';
-import type { AISystem } from './systems/ai-system';
-import type { ResourceManagerSystem } from './systems/resource-manager';
-import type { InventorySystem } from './systems/inventory';
-import type { EquipmentSystem } from './systems/equipment';
-import type { EntitySpawnerSystem } from './systems/entity-spawner';
-import type { NotificationSystem } from './systems/notification';
+import type { GameSystem, PomoEnvironment } from "./systems/environment";
+import type { EffectApplicationSystem } from "./systems/effect-application";
+import type { ProjectileSystem } from "./systems/projectile";
+import type { MovementSystem } from "./systems/movement";
+import type { AISystem } from "./systems/ai-system";
+import type { ResourceManagerSystem } from "./systems/resource-manager";
+import type { InventorySystem } from "./systems/inventory";
+import type { EquipmentSystem } from "./systems/equipment";
+import type { EntitySpawnerSystem } from "./systems/entity-spawner";
+import type { NotificationSystem } from "./systems/notification";
+import type { AbilityActivationSystem } from "./systems/ability-activation";
 
 export interface GameplayLoop {
   update(dt: number): void;
@@ -21,6 +22,8 @@ export interface SystemUpdate {
 export function createGameplayLoop(
   env: PomoEnvironment,
   systems: {
+    abilityActivation: AbilityActivationSystem;
+    combat: GameSystem;
     effectApp: EffectApplicationSystem;
     projectile: ProjectileSystem;
     movement: MovementSystem;
@@ -31,43 +34,57 @@ export function createGameplayLoop(
     entitySpawner: EntitySpawnerSystem;
     notification: NotificationSystem;
     // Future systems go here
-  }
+  },
 ): GameplayLoop {
   return {
     update(dt) {
       const world = env.core.world;
-      const time = world.Time;
-      const previous = time.TotalGameTime;
+      const previous = world.Time.TotalGameTime;
 
-      // 1. Update time
+      // F# system update order (GameplayScene.fs lines 183-205):
+      // 1. Input/Control systems
+      // 2. AbilityActivationSystem
+      // 3. CombatSystem
+      // 4. ResourceManagerSystem
+      // 5. ProjectileSystem
+      // 6. MovementSystem (applies velocities)
+      // 7. AI system
+      // 8. EntitySpawner
+      // 9. EffectProcessing
+      // 10. NotificationSystem
+      // (Render systems handled by Phaser separately)
+
+      // Note: abilityActivation and combat are primarily event-driven,
+      // but we call update() to maintain the F# ordering semantics.
+      systems.abilityActivation.update(dt);
+      systems.combat.update(dt);
+      systems.resourceManager.update(previous + dt, dt);
+      systems.projectile.update(dt);
+      systems.movement.update(dt);
+      systems.ai.update();
+      systems.entitySpawner.update();
+      systems.effectApp.update(world, previous + dt, previous);
+      systems.notification.update(dt);
+      systems.inventory.update?.();
+      systems.equipment.update?.();
+
+      // F#: worldUpdateComponent updates time AFTER all systems
       world.Time = {
         Delta: dt,
         TotalGameTime: previous + dt,
         Previous: previous,
       };
 
-      // 2. Run update-based systems in F# order:
-      // EffectProcessing -> Projectile -> Movement -> AI -> Collision -> Spawner -> ResourceManager -> Notification
-      systems.effectApp.update(world, previous + dt, previous);
-      systems.projectile.update(dt);
-      systems.movement.update(dt);
-      systems.ai.update();
-      systems.entitySpawner.update();
-      systems.resourceManager.update(previous + dt, dt);
-      systems.notification.update(dt);
-
-      // 3. Flush EventBus - processes all events published during this frame
-      // This triggers CombatSystem, EffectApplication, Inventory, Equipment, etc.
+      // F#: worldUpdateComponent flushes EventBus after time update
       env.core.eventBus.flush();
 
-      // 4. Flush all queued state writes
+      // F#: stateWriteFlushComponent (UpdateOrder = 1000) flushes at the very end
       env.core.stateWrite.FlushWrites(world, previous + dt);
-
-      // 5. Refresh world view (our worldView is a proxy, so no explicit refresh needed)
-      // But if we ever cache projections, refresh them here.
     },
 
     dispose() {
+      systems.abilityActivation.dispose?.();
+      systems.combat.dispose?.();
       systems.effectApp.dispose?.();
       systems.projectile.dispose?.();
       systems.movement.dispose?.();
@@ -77,7 +94,6 @@ export function createGameplayLoop(
       systems.equipment.dispose?.();
       systems.entitySpawner.dispose?.();
       systems.notification.dispose?.();
-      // Other systems dispose here
     },
   };
 }

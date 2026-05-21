@@ -30,6 +30,7 @@ export interface SpawnEntityIntent {
   ScenarioId: ScenarioId;
   Type: SpawnType;
   Position: WorldPosition;
+  ActionSets?: Map<number, Map<GameAction, SlotProcessing>>;
 }
 
 export interface SpawnZoneData {
@@ -206,7 +207,6 @@ export type StateChangeEvent =
 
 export type IntentEvent =
   | { kind: 'Ability'; ability: AbilityIntent }
-  | { kind: 'AbilityValidated'; ability: AbilityIntent }
   | { kind: 'Attack'; attack: AttackIntent }
   | { kind: 'EffectApplication'; effectApp: EffectApplicationIntent }
   | { kind: 'EffectDamage'; effectDmg: EffectDamageIntent }
@@ -279,6 +279,8 @@ export type GameAction =
   | 'MoveDown'
   | 'MoveLeft'
   | 'MoveRight'
+  | 'PrimaryAction'
+  | 'SecondaryAction'
   | 'UseSlot1'
   | 'UseSlot2'
   | 'UseSlot3'
@@ -287,6 +289,18 @@ export type GameAction =
   | 'UseSlot6'
   | 'UseSlot7'
   | 'UseSlot8'
+  | 'SetActionSet1'
+  | 'SetActionSet2'
+  | 'SetActionSet3'
+  | 'SetActionSet4'
+  | 'SetActionSet5'
+  | 'SetActionSet6'
+  | 'SetActionSet7'
+  | 'SetActionSet8'
+  | 'ToggleJournal'
+  | 'ToggleInventory'
+  | 'ToggleAbilities'
+  | 'ToggleCharacterSheet'
   | 'Interact'
   | 'Cancel';
 

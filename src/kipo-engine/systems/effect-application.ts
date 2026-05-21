@@ -191,11 +191,14 @@ function processLoopEffects(
     | { kind: 'Tick'; event: GameEvent }
   > = [];
 
+  let loopCount = 0;
   for (const [entityId, effects] of world.ActiveEffects) {
     for (const effect of effects) {
       const duration = effect.SourceEffect.Duration;
       if (duration.kind === 'Loop') {
+        loopCount++;
         const elapsed = totalGameTime - effect.StartTime;
+        console.debug('[EffectProc] Loop effect:', effect.SourceEffect.Name, 'elapsed:', elapsed.toFixed(3), 'duration:', duration.duration);
         if (elapsed >= duration.duration) {
           results.push({ kind: 'Expire', entityId, effectId: effect.Id });
         } else {
@@ -275,34 +278,43 @@ export function createEffectApplicationSystem(env: PomoEnvironment): EffectAppli
     )
     .subscribe((e) => {
       const intent = e.intent.effectApp;
+      console.debug('[EffectApp] Received EffectApplication intent:', intent.Effect.Name, 'target:', intent.TargetEntity);
       const totalGameTime = env.core.world.Time.TotalGameTime;
       const result = applyEffect(env.core.worldView, intent, totalGameTime);
 
-      if (!result) return;
+      if (!result) {
+        console.debug('[EffectApp] applyEffect returned undefined for', intent.Effect.Name);
+        return;
+      }
 
       switch (result.kind) {
         case 'Persistent': {
           const change = result.change;
           switch (change.kind) {
             case 'Applied':
+              console.debug('[EffectApp] Effect applied:', intent.Effect.Name, 'to', change.entityId);
               env.core.stateWrite.ApplyEffect(change.entityId, change.effect);
               break;
             case 'Refreshed':
+              console.debug('[EffectApp] Effect refreshed:', intent.Effect.Name, 'on', change.entityId);
               env.core.stateWrite.RefreshEffect(change.entityId, change.effectId);
               break;
             case 'StackChanged':
+              console.debug('[EffectApp] Stack changed:', intent.Effect.Name, 'on', change.entityId, '->', change.stack);
               env.core.stateWrite.ChangeEffectStack(change.entityId, change.effectId, change.stack);
               break;
           }
           break;
         }
         case 'InstantDmg':
+          console.debug('[EffectApp] Instant damage from effect:', intent.Effect.Name);
           env.core.eventBus.publish({
             kind: 'Intent',
             intent: { kind: 'EffectDamage', effectDmg: result.intent },
           });
           break;
         case 'InstantRes':
+          console.debug('[EffectApp] Instant resource from effect:', intent.Effect.Name);
           env.core.eventBus.publish({
             kind: 'Intent',
             intent: { kind: 'EffectResource', effectRes: result.intent },
@@ -325,8 +337,10 @@ export function createEffectApplicationSystem(env: PomoEnvironment): EffectAppli
       const loopResults = processLoopEffects(world, totalGameTime, previousTime);
       for (const res of loopResults) {
         if (res.kind === 'Expire') {
+          console.debug('[EffectProc] Loop effect expired:', res.entityId, res.effectId);
           env.core.stateWrite.ExpireEffect(res.entityId, res.effectId);
         } else {
+          console.debug('[EffectProc] DOT tick:', (res.event as any).intent?.kind);
           env.core.eventBus.publish(res.event);
         }
       }

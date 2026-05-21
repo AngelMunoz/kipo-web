@@ -186,11 +186,11 @@ describe('Combat System', () => {
     const receivedEvents: GameEvent[] = [];
     const sub = env.core.eventBus.events$.subscribe((e) => receivedEvents.push(e));
 
-    // Publish validated ability intent (bypasses validation layer; tests combat mechanics directly)
+    // Publish ability intent (F#: CombatSystem handles Ability directly)
     env.core.eventBus.publish({
       kind: 'Intent',
       intent: {
-        kind: 'AbilityValidated',
+        kind: 'Ability',
         ability: {
           Caster: casterId,
           SkillId: brandSkillId(1),

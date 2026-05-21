@@ -200,7 +200,11 @@ function applyAdaptive(world: MutableWorld, time: number, cmd: AdaptiveCommand) 
       break;
     }
     case 'ApplyEffect': {
-      if (!world.EntityExists.has(cmd.entityId)) return;
+      if (!world.EntityExists.has(cmd.entityId)) {
+        console.debug('[StateWrite] ApplyEffect SKIPPED: entity', cmd.entityId, 'not in EntityExists');
+        return;
+      }
+      console.debug('[StateWrite] ApplyEffect:', cmd.effect.SourceEffect.Name, 'to', cmd.entityId);
       const existing = world.ActiveEffects.get(cmd.entityId);
       if (existing) {
         existing.push(cmd.effect);
@@ -293,13 +297,19 @@ function applyAdaptive(world: MutableWorld, time: number, cmd: AdaptiveCommand) 
       break;
     }
     case 'CreateProjectile': {
-      // Determine starting position
+      console.debug('[StateWrite] CreateProjectile', cmd.entityId, 'target:', cmd.projectile.Target.kind, 'caster:', cmd.projectile.Caster);
+      // Determine starting position:
+      // 1. If explicitly provided (e.g., chain projectile), use that
+      // 2. For position-targeted projectiles, spawn AT the target
+      // 3. Otherwise, spawn at caster position
       let startingPos = cmd.pos;
       if (startingPos === undefined) {
         switch (cmd.projectile.Target.kind) {
-          case 'PositionTarget':
+          case 'PositionTarget': {
+            // F#: PositionTarget projectiles always spawn at target position
             startingPos = { X: cmd.projectile.Target.position.X, Y: 0, Z: cmd.projectile.Target.position.Y };
             break;
+          }
           case 'EntityTarget': {
             const casterPos = world.Positions.get(cmd.projectile.Caster);
             if (casterPos) startingPos = casterPos;
@@ -416,8 +426,11 @@ function applyAdaptive(world: MutableWorld, time: number, cmd: AdaptiveCommand) 
       world.MovementStates.delete(cmd.entityId);
       world.RawInputStates.delete(cmd.entityId);
       world.InputMaps.delete(cmd.entityId);
+      world.GameActionStates.delete(cmd.entityId);
       world.Resources.delete(cmd.entityId);
       world.Factions.delete(cmd.entityId);
+      world.ActionSets.delete(cmd.entityId);
+      world.ActiveActionSets.delete(cmd.entityId);
       world.BaseStats.delete(cmd.entityId);
       world.ActiveEffects.delete(cmd.entityId);
       world.AbilityCooldowns.delete(cmd.entityId);

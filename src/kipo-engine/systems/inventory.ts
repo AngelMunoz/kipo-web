@@ -67,6 +67,7 @@ function handleUseItemIntent(
 // --- System Factory ---
 
 export interface InventorySystem {
+  update?(): void;
   dispose(): void;
 }
 

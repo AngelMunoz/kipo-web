@@ -128,7 +128,7 @@ export function updateProjectiles(
 
     // Check if arrived
     const dist = vector2Distance(toVector2(projPos), toVector2(targetPos));
-    const threshold = 1.0; // Arrival threshold
+    const threshold = 16.0; // F#: Constants.Projectile.ArrivalThreshold = 16f
 
     if (dist < threshold) {
       // Impact!
@@ -149,23 +149,24 @@ export function updateProjectiles(
         }
       }
     } else {
-      // Update velocity towards target (horizontal only, Y is height)
+      // Update velocity towards target (3D, matching F# handleHorizontalFlight)
       const dx = targetPos.X - projPos.X;
       const dz = targetPos.Z - projPos.Z;
-      const len = Math.sqrt(dx * dx + dz * dz);
-      if (len > 0.001) {
+      const xzDist = Math.sqrt(dx * dx + dz * dz);
+      if (xzDist > 0.1) {
         const speed = projectile.Info.Speed;
-        const vx = (dx / len) * speed;
-        const vz = (dz / len) * speed;
-        // Y velocity: proportional descent if needed, but for headless we just move XZ
-        // In F#, Y velocity is calculated based on altitude difference. For 2D headless, we keep Y=0.
-        const vy = 0;
+        const vx = (dx / xzDist) * speed;
+        const vz = (dz / xzDist) * speed;
+        // Y velocity: proportional descent to arrive at target Y when reaching XZ
+        // F#: yVelocity = (yDelta / xzDist) * speed
+        const yDelta = targetPos.Y - projPos.Y;
+        const vy = (yDelta / xzDist) * speed;
         world.Velocities.set(projectileId, { X: vx, Y: vy, Z: vz });
       }
     }
   }
 
-  // Apply movement
+  // Apply movement (position update mirrors F# MovementSystem behavior)
   for (const [projectileId] of world.LiveProjectiles) {
     if (projectilesToRemove.includes(projectileId)) continue;
     const pos = world.Positions.get(projectileId);
@@ -179,14 +180,9 @@ export function updateProjectiles(
     }
   }
 
-  // Remove expired projectiles
+  // Remove expired projectiles via stateWrite for consistent cleanup
   for (const id of projectilesToRemove) {
-    world.EntityExists.delete(id);
-    world.Positions.delete(id);
-    world.Velocities.delete(id);
-    world.LiveProjectiles.delete(id);
-    world.EntityScenario.delete(id);
-    world.ModelConfigId.delete(id);
+    env.core.stateWrite.RemoveEntity(id);
   }
 
   // Publish impact events

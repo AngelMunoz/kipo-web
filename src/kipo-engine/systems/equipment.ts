@@ -5,6 +5,7 @@ import type { PomoEnvironment } from './environment';
 // --- System Factory ---
 
 export interface EquipmentSystem {
+  update?(): void;
   dispose(): void;
 }
 

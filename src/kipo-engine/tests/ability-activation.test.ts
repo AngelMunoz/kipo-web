@@ -301,7 +301,7 @@ describe('AbilityActivation Validation', () => {
 });
 
 describe('AbilityActivationSystem EventBus Integration', () => {
-  it('should validate and forward AbilityIntent as AbilityValidated', () => {
+  it('should let direct Ability intents pass through to CombatSystem (F# semantics)', () => {
     const world = createMutableWorld();
     const scenarioId = brandScenarioId('test-scenario');
     const casterId = brandEntityId('caster-1');
@@ -322,6 +322,7 @@ describe('AbilityActivationSystem EventBus Integration', () => {
     const receivedEvents: GameEvent[] = [];
     const sub = env.core.eventBus.events$.subscribe((e) => receivedEvents.push(e));
 
+    // F#: TargetingService publishes Ability directly; CombatSystem handles it
     env.core.eventBus.publish({
       kind: 'Intent',
       intent: {
@@ -336,77 +337,11 @@ describe('AbilityActivationSystem EventBus Integration', () => {
 
     env.core.eventBus.flush();
 
-    // Should have AbilityValidated event
-    const validatedEvents = receivedEvents.filter(
-      (e) => e.kind === 'Intent' && e.intent.kind === 'AbilityValidated'
-    );
-    expect(validatedEvents.length).toBe(1);
-
-    // Combat should have processed it and published DamageDealt (self-damage from formula)
+    // Combat should have processed it directly (no AbilityValidated indirection in F#)
     const damageEvents = receivedEvents.filter(
       (e) => e.kind === 'Notification' && e.notification.kind === 'DamageDealt'
     );
     expect(damageEvents.length).toBeGreaterThanOrEqual(1);
-
-    sub.unsubscribe();
-    abilityActivation.dispose?.();
-    combat.dispose?.();
-  });
-
-  it('should reject invalid AbilityIntent and publish ShowMessage notification', () => {
-    const world = createMutableWorld();
-    const scenarioId = brandScenarioId('test-scenario');
-    const casterId = brandEntityId('caster-1');
-
-    spawnEntity(
-      world,
-      casterId,
-      scenarioId,
-      { Power: 10, Magic: 10, Sense: 0, Charm: 10 },
-      { X: 0, Y: 0, Z: 0 },
-      { HP: 100, MP: 5, Status: 'Alive' } // Only 5 MP, skill costs 10
-    );
-
-    const env = createMinimalEnv(world, createFakeStores(new Map([[1, testSkill]])), 0);
-    const abilityActivation = createAbilityActivationSystem(env);
-    const combat = createCombatSystem(env);
-
-    const receivedEvents: GameEvent[] = [];
-    const sub = env.core.eventBus.events$.subscribe((e) => receivedEvents.push(e));
-
-    env.core.eventBus.publish({
-      kind: 'Intent',
-      intent: {
-        kind: 'Ability',
-        ability: {
-          Caster: casterId,
-          SkillId: brandSkillId(1),
-          Target: { kind: 'TargetSelf' },
-        },
-      },
-    });
-
-    env.core.eventBus.flush();
-
-    // Should NOT have AbilityValidated
-    const validatedEvents = receivedEvents.filter(
-      (e) => e.kind === 'Intent' && e.intent.kind === 'AbilityValidated'
-    );
-    expect(validatedEvents.length).toBe(0);
-
-    // Should have ShowMessage error notification
-    const showMessageEvents = receivedEvents.filter(
-      (e) => e.kind === 'Notification' && e.notification.kind === 'ShowMessage'
-    );
-    expect(showMessageEvents.length).toBe(1);
-    const msg = (showMessageEvents[0] as { kind: 'Notification'; notification: { kind: 'ShowMessage'; message: { Message: string } } }).notification.message;
-    expect(msg.Message).toBe('Not enough resources!');
-
-    // Combat should not have processed anything
-    const damageEvents = receivedEvents.filter(
-      (e) => e.kind === 'Notification' && e.notification.kind === 'DamageDealt'
-    );
-    expect(damageEvents.length).toBe(0);
 
     sub.unsubscribe();
     abilityActivation.dispose?.();
@@ -453,11 +388,11 @@ describe('AbilityActivationSystem EventBus Integration', () => {
     env.core.eventBus.flush();
     env.core.stateWrite.FlushWrites(world, 0);
 
-    // Should have AbilityValidated and resulting damage
-    const validatedEvents = receivedEvents.filter(
-      (e) => e.kind === 'Intent' && e.intent.kind === 'AbilityValidated'
+    // F#: AbilityActivationSystem publishes Ability directly for pending casts
+    const abilityEvents = receivedEvents.filter(
+      (e) => e.kind === 'Intent' && e.intent.kind === 'Ability'
     );
-    expect(validatedEvents.length).toBe(1);
+    expect(abilityEvents.length).toBe(1);
 
     const damageEvents = receivedEvents.filter(
       (e) => e.kind === 'Notification' && e.notification.kind === 'DamageDealt'
@@ -524,11 +459,11 @@ describe('AbilityActivationSystem EventBus Integration', () => {
     env.core.eventBus.flush();
     env.core.stateWrite.FlushWrites(world, 0);
 
-    // Should NOT have AbilityValidated (out of range)
-    const validatedEvents = receivedEvents.filter(
-      (e) => e.kind === 'Intent' && e.intent.kind === 'AbilityValidated'
+    // Should NOT have Ability (out of range)
+    const abilityEvents = receivedEvents.filter(
+      (e) => e.kind === 'Intent' && e.intent.kind === 'Ability'
     );
-    expect(validatedEvents.length).toBe(0);
+    expect(abilityEvents.length).toBe(0);
 
     // Should have ShowMessage "Target is out of range"
     const showMessageEvents = receivedEvents.filter(

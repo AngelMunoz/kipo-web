@@ -431,9 +431,11 @@ function handleProjectileDelivery(
     }
   } else {
     // Fallback to single target logic
+    console.debug('[Combat] handleProjectileDelivery fallback, target.kind:', target.kind);
     switch (target.kind) {
       case 'TargetEntity': {
         const projectileId = crypto.randomUUID() as EntityId;
+        console.debug('[Combat] Creating EntityTarget projectile', projectileId);
         const liveProjectile: import('../domain/projectile').LiveProjectile = {
           Caster: casterId,
           Target: { kind: 'EntityTarget', entity: target.entity },
@@ -445,6 +447,7 @@ function handleProjectileDelivery(
       }
       case 'TargetPosition': {
         const projectileId = crypto.randomUUID() as EntityId;
+        console.debug('[Combat] Creating PositionTarget projectile', projectileId, 'pos:', target.position);
         const liveProjectile: import('../domain/projectile').LiveProjectile = {
           Caster: casterId,
           Target: { kind: 'PositionTarget', position: target.position },
@@ -630,6 +633,7 @@ function handleProjectileImpact(env: PomoEnvironment, impact: import('../domain/
       });
 
       for (const effect of skill.Effects) {
+        console.debug('[Combat] Publishing EffectApplication for', effect.Name, 'on target', targetId);
         env.core.eventBus.publish({
           kind: 'Intent',
           intent: {
@@ -694,14 +698,15 @@ function handleChargeCompleted(env: PomoEnvironment, completed: import('../domai
 export function createCombatSystem(env: PomoEnvironment): GameSystem {
   const subs: Subscription[] = [];
 
-  // Subscribe to AbilityValidated (post-validation intents)
+  // Subscribe to Ability intents (F#: CombatSystem handles Ability directly)
   subs.push(
     env.core.eventBus.events$
       .pipe(
-        filter((e): e is GameEvent => e.kind === 'Intent' && e.intent.kind === 'AbilityValidated')
+        filter((e): e is GameEvent => e.kind === 'Intent' && e.intent.kind === 'Ability')
       )
       .subscribe((e) => {
-        if (e.kind === 'Intent' && e.intent.kind === 'AbilityValidated') {
+        if (e.kind === 'Intent' && e.intent.kind === 'Ability') {
+          console.debug('[Combat] Ability intent received:', e.intent.ability.SkillId, 'caster:', e.intent.ability.Caster, 'target:', e.intent.ability.Target);
           handleAbilityIntent(env, e.intent.ability);
         }
       })

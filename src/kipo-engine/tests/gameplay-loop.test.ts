@@ -1,39 +1,44 @@
-import { describe, it, expect } from 'vitest';
-import { brandEntityId, brandScenarioId, brandSkillId } from '../types/branded';
-import { createMutableWorld, createWorldView } from '../state/mutable-world';
-import { createStateWriteService } from '../systems/state-write';
-import { createEventBus } from '../events/event-bus';
-import { createSeededPRNG } from '../utils/rng';
-import { createCombatSystem } from '../systems/combat';
-import { createAbilityActivationSystem } from '../systems/ability-activation';
-import { createEffectApplicationSystem } from '../systems/effect-application';
-import { createProjectileSystem } from '../systems/projectile';
-import { createMovementSystem } from '../systems/movement';
-import { createAISystem } from '../systems/ai-system';
-import { createResourceManagerSystem } from '../systems/resource-manager';
-import { createInventorySystem } from '../systems/inventory';
-import { createEquipmentSystem } from '../systems/equipment';
-import { createEntitySpawnerSystem } from '../systems/entity-spawner';
-import { createNotificationSystem } from '../systems/notification';
-import { createGameplayLoop } from '../gameplay-loop';
-import type { ActiveSkill, Effect } from '../domain/skill';
-import type { PomoEnvironment, GameplayServices, CoreServices, StoreServices } from '../systems/environment';
-import type { SkillStore } from '../stores/content-store';
-import type { MutableWorld } from '../domain/world';
-import type { BaseStats, Resource } from '../domain/entity';
-import type { GameEvent } from '../domain/events';
-import type { EntityId, ScenarioId } from '../types/branded';
+import { describe, it, expect } from "vitest";
+import { brandEntityId, brandScenarioId, brandSkillId } from "../types/branded";
+import { createMutableWorld, createWorldView } from "../state/mutable-world";
+import { createStateWriteService } from "../systems/state-write";
+import { createEventBus } from "../events/event-bus";
+import { createSeededPRNG } from "../utils/rng";
+import { createCombatSystem } from "../systems/combat";
+import { createAbilityActivationSystem } from "../systems/ability-activation";
+import { createEffectApplicationSystem } from "../systems/effect-application";
+import { createProjectileSystem } from "../systems/projectile";
+import { createMovementSystem } from "../systems/movement";
+import { createAISystem } from "../systems/ai-system";
+import { createResourceManagerSystem } from "../systems/resource-manager";
+import { createInventorySystem } from "../systems/inventory";
+import { createEquipmentSystem } from "../systems/equipment";
+import { createEntitySpawnerSystem } from "../systems/entity-spawner";
+import { createNotificationSystem } from "../systems/notification";
+import { createGameplayLoop } from "../gameplay-loop";
+import type { ActiveSkill, Effect } from "../domain/skill";
+import type {
+  PomoEnvironment,
+  GameplayServices,
+  CoreServices,
+  StoreServices,
+} from "../systems/environment";
+import type { SkillStore } from "../stores/content-store";
+import type { MutableWorld } from "../domain/world";
+import type { BaseStats, Resource } from "../domain/entity";
+import type { GameEvent } from "../domain/events";
+import type { EntityId, ScenarioId } from "../types/branded";
 
 function createFakeSkillStore(skill: ActiveSkill): SkillStore {
   return {
     tryFind(id) {
-      return id === skill.Id ? { kind: 'Active', active: skill } : undefined;
+      return id === skill.Id ? { kind: "Active", active: skill } : undefined;
     },
     getActive(id) {
       return id === skill.Id ? skill : undefined;
     },
     all() {
-      return [{ kind: 'Active', active: skill }];
+      return [{ kind: "Active", active: skill }];
     },
   };
 }
@@ -41,11 +46,46 @@ function createFakeSkillStore(skill: ActiveSkill): SkillStore {
 function createFakeStores(skill: ActiveSkill): StoreServices {
   return {
     skillStore: createFakeSkillStore(skill),
-    itemStore: { tryFind() { return undefined; }, all() { return []; } },
-    aiArchetypeStore: { tryFind() { return undefined; }, all() { return []; } },
-    aiEntityStore: { tryFind() { return undefined; }, all() { return []; } },
-    aiFamilyStore: { tryFind() { return undefined; }, all() { return []; } },
-    decisionTreeStore: { tryFind() { return undefined; }, all() { return []; } },
+    itemStore: {
+      tryFind() {
+        return undefined;
+      },
+      all() {
+        return [];
+      },
+    },
+    aiArchetypeStore: {
+      tryFind() {
+        return undefined;
+      },
+      all() {
+        return [];
+      },
+    },
+    aiEntityStore: {
+      tryFind() {
+        return undefined;
+      },
+      all() {
+        return [];
+      },
+    },
+    aiFamilyStore: {
+      tryFind() {
+        return undefined;
+      },
+      all() {
+        return [];
+      },
+    },
+    decisionTreeStore: {
+      tryFind() {
+        return undefined;
+      },
+      all() {
+        return [];
+      },
+    },
   };
 }
 
@@ -53,7 +93,12 @@ function createFakeGameplayServices(): GameplayServices {
   return {
     projections: {
       computeMovementSnapshot() {
-        return { Positions: new Map(), SpatialGrid: new Map(), Rotations: new Map(), ModelConfigIds: new Map() };
+        return {
+          Positions: new Map(),
+          SpatialGrid: new Map(),
+          Rotations: new Map(),
+          ModelConfigIds: new Map(),
+        };
       },
       getNearbyEntitiesSnapshot() {
         return [];
@@ -83,7 +128,9 @@ function createFakeGameplayServices(): GameplayServices {
       },
     },
     cameraService: {
-      getAllCameras() { return []; },
+      getAllCameras() {
+        return [];
+      },
     },
   };
 }
@@ -91,7 +138,7 @@ function createFakeGameplayServices(): GameplayServices {
 function createMinimalEnv(
   world: MutableWorld,
   stores: StoreServices,
-  seed = 0
+  seed = 0,
 ): PomoEnvironment {
   const eventBus = createEventBus();
   const stateWrite = createStateWriteService();
@@ -119,7 +166,7 @@ function spawnEntity(
   scenarioId: ScenarioId,
   baseStats: BaseStats,
   position: { X: number; Y: number; Z: number },
-  resources: Resource
+  resources: Resource,
 ) {
   world.EntityExists.add(id);
   world.Positions.set(id, position);
@@ -127,15 +174,15 @@ function spawnEntity(
   world.BaseStats.set(id, baseStats);
   world.Resources.set(id, resources);
   world.EntityScenario.set(id, scenarioId);
-  world.Factions.set(id, new Set(['Player']));
+  world.Factions.set(id, new Set(["Player"]));
 }
 
-describe('Gameplay Loop Integration', () => {
-  it('should process ability intent through combat and effect application end-to-end', () => {
+describe("Gameplay Loop Integration", () => {
+  it("should process ability intent through combat and effect application end-to-end", () => {
     const world = createMutableWorld();
-    const scenarioId = brandScenarioId('test-scenario');
-    const casterId = brandEntityId('caster-1');
-    const targetId = brandEntityId('target-1');
+    const scenarioId = brandScenarioId("test-scenario");
+    const casterId = brandEntityId("caster-1");
+    const targetId = brandEntityId("target-1");
 
     spawnEntity(
       world,
@@ -143,7 +190,7 @@ describe('Gameplay Loop Integration', () => {
       scenarioId,
       { Power: 10, Magic: 10, Sense: 0, Charm: 10 },
       { X: 0, Y: 0, Z: 0 },
-      { HP: 100, MP: 100, Status: 'Alive' }
+      { HP: 100, MP: 100, Status: "Alive" },
     );
 
     spawnEntity(
@@ -152,39 +199,58 @@ describe('Gameplay Loop Integration', () => {
       scenarioId,
       { Power: 5, Magic: 5, Sense: 5, Charm: 5 },
       { X: 10, Y: 0, Z: 0 },
-      { HP: 100, MP: 100, Status: 'Alive' }
+      { HP: 100, MP: 100, Status: "Alive" },
     );
 
     const dotEffect: Effect = {
-      Name: 'Bleed',
-      Kind: 'DamageOverTime',
-      DamageSource: 'Physical',
-      Stacking: { kind: 'NoStack' },
-      Duration: { kind: 'Timed', seconds: 5 },
-      Visuals: { ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined },
+      Name: "Bleed",
+      Kind: "DamageOverTime",
+      DamageSource: "Physical",
+      Stacking: { kind: "NoStack" },
+      Duration: { kind: "Timed", seconds: 5 },
+      Visuals: {
+        ModelId: undefined,
+        VfxId: undefined,
+        AnimationId: undefined,
+        AttachmentPoint: undefined,
+      },
       Modifiers: [
-        { kind: 'AbilityDamageMod', abilityDamageValue: { kind: 'Const', value: 5 }, element: undefined },
+        {
+          kind: "AbilityDamageMod",
+          abilityDamageValue: { kind: "Const", value: 5 },
+          element: undefined,
+        },
       ],
     };
 
     const meleeSkill: ActiveSkill = {
       Id: 1,
-      Name: 'Melee Attack',
-      Description: 'Test melee',
-      Intent: 'Offensive',
-      DamageSource: 'Physical',
-      Cost: { ResourceType: 'MP', Amount: 10 },
+      Name: "Melee Attack",
+      Description: "Test melee",
+      Intent: "Offensive",
+      DamageSource: "Physical",
+      Cost: { ResourceType: "MP", Amount: 10 },
       Cooldown: 1.5,
       CastingTime: undefined,
-      Targeting: 'TargetEntity',
+      Targeting: "TargetEntity",
       Range: 16,
-      Area: { kind: 'Point' },
-      Delivery: { kind: 'Instant' },
-      Origin: { kind: 'Caster' },
-      CastVisuals: { ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined },
-      ImpactVisuals: { ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined },
+      Area: { kind: "Point" },
+      Delivery: { kind: "Instant" },
+      Origin: { kind: "Caster" },
+      CastVisuals: {
+        ModelId: undefined,
+        VfxId: undefined,
+        AnimationId: undefined,
+        AttachmentPoint: undefined,
+      },
+      ImpactVisuals: {
+        ModelId: undefined,
+        VfxId: undefined,
+        AnimationId: undefined,
+        AttachmentPoint: undefined,
+      },
       Effects: [dotEffect],
-      Formula: { kind: 'Const', value: 20 },
+      Formula: { kind: "Const", value: 20 },
       ChargePhase: undefined,
       ElementFormula: undefined,
     };
@@ -205,6 +271,12 @@ describe('Gameplay Loop Integration', () => {
     const notification = createNotificationSystem(env);
 
     const loop = createGameplayLoop(env, {
+      abilityActivation: {
+        kind: "AbilityActivation",
+        update: () => {},
+        dispose: () => {},
+      },
+      combat: { kind: "Combat", update: () => {}, dispose: () => {} },
       effectApp,
       projectile,
       movement,
@@ -217,17 +289,19 @@ describe('Gameplay Loop Integration', () => {
     });
 
     const receivedEvents: GameEvent[] = [];
-    const sub = env.core.eventBus.events$.subscribe((e) => receivedEvents.push(e));
+    const sub = env.core.eventBus.events$.subscribe((e) =>
+      receivedEvents.push(e),
+    );
 
     // Publish ability intent
     env.core.eventBus.publish({
-      kind: 'Intent',
+      kind: "Intent",
       intent: {
-        kind: 'Ability',
+        kind: "Ability",
         ability: {
           Caster: casterId,
           SkillId: brandSkillId(1),
-          Target: { kind: 'TargetEntity', entity: targetId },
+          Target: { kind: "TargetEntity", entity: targetId },
         },
       },
     });
@@ -239,14 +313,17 @@ describe('Gameplay Loop Integration', () => {
 
     // Verify damage dealt notification was published
     const damageEvents = receivedEvents.filter(
-      (e) => e.kind === 'Notification' && e.notification.kind === 'DamageDealt'
+      (e) => e.kind === "Notification" && e.notification.kind === "DamageDealt",
     );
     expect(damageEvents.length).toBeGreaterThanOrEqual(1);
 
     // BaseDamage = 20, defender DP = 11, no crit => 9 damage
     if (damageEvents.length > 0) {
       const damageEvent = damageEvents[0];
-      if (damageEvent.kind === 'Notification' && damageEvent.notification.kind === 'DamageDealt') {
+      if (
+        damageEvent.kind === "Notification" &&
+        damageEvent.notification.kind === "DamageDealt"
+      ) {
         expect(damageEvent.notification.damage.Amount).toBe(9);
       }
     }
@@ -259,7 +336,7 @@ describe('Gameplay Loop Integration', () => {
     const targetEffects = world.ActiveEffects.get(targetId);
     expect(targetEffects).toBeDefined();
     expect(targetEffects!.length).toBe(1);
-    expect(targetEffects![0].SourceEffect.Name).toBe('Bleed');
+    expect(targetEffects![0].SourceEffect.Name).toBe("Bleed");
 
     // Cleanup
     loop.dispose();
@@ -267,11 +344,11 @@ describe('Gameplay Loop Integration', () => {
     abilityActivation.dispose?.();
   });
 
-  it('should process projectile delivery and impact over multiple frames', () => {
+  it("should process projectile delivery and impact over multiple frames", () => {
     const world = createMutableWorld();
-    const scenarioId = brandScenarioId('test-scenario');
-    const casterId = brandEntityId('caster-1');
-    const targetId = brandEntityId('target-1');
+    const scenarioId = brandScenarioId("test-scenario");
+    const casterId = brandEntityId("caster-1");
+    const targetId = brandEntityId("target-1");
 
     spawnEntity(
       world,
@@ -279,7 +356,7 @@ describe('Gameplay Loop Integration', () => {
       scenarioId,
       { Power: 10, Magic: 10, Sense: 0, Charm: 10 },
       { X: 0, Y: 0, Z: 0 },
-      { HP: 100, MP: 100, Status: 'Alive' }
+      { HP: 100, MP: 100, Status: "Alive" },
     );
 
     spawnEntity(
@@ -288,36 +365,51 @@ describe('Gameplay Loop Integration', () => {
       scenarioId,
       { Power: 5, Magic: 5, Sense: 5, Charm: 5 },
       { X: 100, Y: 0, Z: 0 }, // 100 units away
-      { HP: 100, MP: 100, Status: 'Alive' }
+      { HP: 100, MP: 100, Status: "Alive" },
     );
 
     const projectileSkill: ActiveSkill = {
       Id: 2,
-      Name: 'Fireball',
-      Description: 'Test projectile',
-      Intent: 'Offensive',
-      DamageSource: 'Physical',
-      Cost: { ResourceType: 'MP', Amount: 10 },
+      Name: "Fireball",
+      Description: "Test projectile",
+      Intent: "Offensive",
+      DamageSource: "Physical",
+      Cost: { ResourceType: "MP", Amount: 10 },
       Cooldown: 1.5,
       CastingTime: undefined,
-      Targeting: 'TargetEntity',
+      Targeting: "TargetEntity",
       Range: 200,
-      Area: { kind: 'Point' },
+      Area: { kind: "Point" },
       Delivery: {
-        kind: 'Projectile',
+        kind: "Projectile",
         projectile: {
           Speed: 50, // 50 units/sec
-          Collision: 'IgnoreTerrain',
+          Collision: "IgnoreTerrain",
           Variations: undefined,
-          Visuals: { ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined },
+          Visuals: {
+            ModelId: undefined,
+            VfxId: undefined,
+            AnimationId: undefined,
+            AttachmentPoint: undefined,
+          },
           TerrainImpactVisuals: undefined,
         },
       },
-      Origin: { kind: 'Caster' },
-      CastVisuals: { ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined },
-      ImpactVisuals: { ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined },
+      Origin: { kind: "Caster" },
+      CastVisuals: {
+        ModelId: undefined,
+        VfxId: undefined,
+        AnimationId: undefined,
+        AttachmentPoint: undefined,
+      },
+      ImpactVisuals: {
+        ModelId: undefined,
+        VfxId: undefined,
+        AnimationId: undefined,
+        AttachmentPoint: undefined,
+      },
       Effects: [],
-      Formula: { kind: 'Const', value: 30 },
+      Formula: { kind: "Const", value: 30 },
       ChargePhase: undefined,
       ElementFormula: undefined,
     };
@@ -337,6 +429,12 @@ describe('Gameplay Loop Integration', () => {
     const notification = createNotificationSystem(env);
 
     const loop = createGameplayLoop(env, {
+      abilityActivation: {
+        kind: "AbilityActivation",
+        update: () => {},
+        dispose: () => {},
+      },
+      combat: { kind: "Combat", update: () => {}, dispose: () => {} },
       effectApp,
       projectile,
       movement,
@@ -349,17 +447,19 @@ describe('Gameplay Loop Integration', () => {
     });
 
     const receivedEvents: GameEvent[] = [];
-    const sub = env.core.eventBus.events$.subscribe((e) => receivedEvents.push(e));
+    const sub = env.core.eventBus.events$.subscribe((e) =>
+      receivedEvents.push(e),
+    );
 
     // Publish ability intent (should create projectile)
     env.core.eventBus.publish({
-      kind: 'Intent',
+      kind: "Intent",
       intent: {
-        kind: 'Ability',
+        kind: "Ability",
         ability: {
           Caster: casterId,
           SkillId: brandSkillId(2),
-          Target: { kind: 'TargetEntity', entity: targetId },
+          Target: { kind: "TargetEntity", entity: targetId },
         },
       },
     });
@@ -380,7 +480,7 @@ describe('Gameplay Loop Integration', () => {
 
     // Verify impact damage notification
     const damageEvents = receivedEvents.filter(
-      (e) => e.kind === 'Notification' && e.notification.kind === 'DamageDealt'
+      (e) => e.kind === "Notification" && e.notification.kind === "DamageDealt",
     );
     expect(damageEvents.length).toBeGreaterThanOrEqual(1);
 

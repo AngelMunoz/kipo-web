@@ -1,106 +1,96 @@
-import { createSignal } from 'solid-js'
-import solidLogo from './assets/solid.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { createSignal, onMount } from 'solid-js';
+import { createGameplayScene } from './renderer/gameplay-scene';
+import { bootstrapGame } from './renderer/bootstrap';
 
 function App() {
-  const [count, setCount] = createSignal(0)
+  const [gameReady, setGameReady] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+
+  onMount(async () => {
+    try {
+      const gameContainer = document.getElementById('game-container');
+      if (!gameContainer) {
+        setError('Game container not found');
+        return;
+      }
+
+      const bootstrap = await bootstrapGame();
+      
+      createGameplayScene(
+        gameContainer,
+        bootstrap.world,
+        bootstrap.env,
+        bootstrap.gameplayLoop,
+        bootstrap.particleStore
+      );
+
+      setGameReady(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  });
 
   return (
-    <>
-      <section id="center">
-        <div class="hero">
-          <img src={heroImg} class="base" width="170" height="179" alt="" />
-          <img src={solidLogo} class="framework" alt="Solid logo" />
-          <img src={viteLogo} class="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          class="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count()}
-        </button>
-      </section>
+    <div style={{
+      position: 'relative',
+      width: '100vw',
+      height: '100vh',
+      background: '#111',
+      overflow: 'hidden',
+    }}>
+      <div id="game-container" style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+      }} />
 
-      <div class="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img class="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://solidjs.com/" target="_blank">
-                <img class="button-icon" src={solidLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {!gameReady() && !error() && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'center',
+          'z-index': 10,
+        }}>
+          <p style={{ color: '#fff' }}>Loading game...</p>
         </div>
-        <div id="social">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      )}
 
-      <div class="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      {error() && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'center',
+          'z-index': 10,
+        }}>
+          <p style={{ color: 'red' }}>Error: {error()}</p>
+        </div>
+      )}
+
+      {gameReady() && (
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          'text-align': 'center',
+          padding: '8px 12px',
+          background: 'rgba(26, 26, 46, 0.85)',
+          color: '#fff',
+          'font-size': '12px',
+          'z-index': 10,
+          'pointer-events': 'none',
+        }}>
+          WASD to move | 1-8 for skills | Click to target | Right-click to cancel
+        </div>
+      )}
+    </div>
+  );
 }
 
-export default App
+export default App;

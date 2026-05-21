@@ -203,10 +203,11 @@ function handlePendingCast(
   const maxRange = skill.Range ?? 0;
 
   if (distance <= maxRange + SKILL_ACTIVATION_RANGE_BUFFER) {
+    // F#: AbilityActivationSystem publishes Ability directly, not AbilityValidated
     env.core.eventBus.publish({
       kind: 'Intent',
       intent: {
-        kind: 'AbilityValidated',
+        kind: 'Ability',
         ability: {
           Caster: entityId,
           SkillId: skillId,
@@ -240,41 +241,9 @@ export interface AbilityActivationSystem extends GameSystem {
 export function createAbilityActivationSystem(env: PomoEnvironment): AbilityActivationSystem {
   const subs: Subscription[] = [];
 
-  // Subscribe to raw AbilityIntent events and validate before forwarding to CombatSystem
-  subs.push(
-    env.core.eventBus.events$
-      .pipe(
-        filter((e): e is GameEvent => e.kind === 'Intent' && e.intent.kind === 'Ability')
-      )
-      .subscribe((e) => {
-        if (e.kind !== 'Intent' || e.intent.kind !== 'Ability') return;
-        const intent = e.intent.ability;
-
-        const statuses = env.core.worldView.CombatStatuses.get(intent.Caster) ?? [];
-        const resources = env.core.worldView.Resources.get(intent.Caster);
-        const cooldowns = env.core.worldView.AbilityCooldowns.get(intent.Caster);
-        const gameTime = env.core.worldView.Time.TotalGameTime;
-
-        const context: ValidationContext = {
-          SkillStore: env.stores.skillStore,
-          Statuses: statuses,
-          Resources: resources,
-          Cooldowns: cooldowns,
-          GameTime: gameTime,
-          EntityId: intent.Caster,
-        };
-
-        const result = validateAbility(context, intent.SkillId);
-        if (result.ok) {
-          env.core.eventBus.publish({
-            kind: 'Intent',
-            intent: { kind: 'AbilityValidated', ability: intent },
-          });
-        } else {
-          publishValidationError(env, intent.Caster, result.error);
-        }
-      })
-  );
+  // F# note: AbilityActivationSystem does NOT validate direct Ability intents.
+  // TargetingService publishes Ability directly; CombatSystem handles it.
+  // Validation only happens for pending casts (MovementStateChanged handler below).
 
   // Subscribe to MovementStateChanged to handle pending casts
   subs.push(

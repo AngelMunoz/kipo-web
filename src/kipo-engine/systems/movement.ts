@@ -18,6 +18,20 @@ function getPosition(world: import('../domain/world').MutableWorld, entityId: En
   return toVector2(pos);
 }
 
+function publishMovementStateChanged(env: PomoEnvironment, entityId: EntityId, state: import('../domain/events').MovementState) {
+  env.core.eventBus.publish({
+    kind: 'State',
+    state: {
+      kind: 'Physics',
+      event: {
+        kind: 'MovementStateChanged',
+        entityId,
+        state,
+      },
+    },
+  });
+}
+
 function updateMovementTargets(env: PomoEnvironment) {
   const world = env.core.world;
 
@@ -33,6 +47,7 @@ function updateMovementTargets(env: PomoEnvironment) {
           // Arrived
           env.core.stateWrite.UpdateMovementState(entityId, { kind: 'Idle' });
           world.Velocities.set(entityId, { X: 0, Y: 0, Z: 0 });
+          publishMovementStateChanged(env, entityId, { kind: 'Idle' });
         } else {
           // Move towards target
           const dir = vector2Normalize({ X: target.X - pos.X, Y: target.Y - pos.Y });
@@ -47,6 +62,7 @@ function updateMovementTargets(env: PomoEnvironment) {
         if (state.path.length === 0) {
           env.core.stateWrite.UpdateMovementState(entityId, { kind: 'Idle' });
           world.Velocities.set(entityId, { X: 0, Y: 0, Z: 0 });
+          publishMovementStateChanged(env, entityId, { kind: 'Idle' });
           break;
         }
         const currentTarget = state.path[0];
@@ -61,6 +77,7 @@ function updateMovementTargets(env: PomoEnvironment) {
           if (remaining.length === 0) {
             env.core.stateWrite.UpdateMovementState(entityId, { kind: 'Idle' });
             world.Velocities.set(entityId, { X: 0, Y: 0, Z: 0 });
+            publishMovementStateChanged(env, entityId, { kind: 'Idle' });
           } else {
             env.core.stateWrite.UpdateMovementState(entityId, { kind: 'MovingAlongPath', path: remaining });
           }

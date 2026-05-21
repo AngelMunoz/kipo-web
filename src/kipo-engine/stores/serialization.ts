@@ -144,8 +144,8 @@ const EffectModifierSchema = z.discriminatedUnion('Type', [
 const EffectSchema: z.ZodType<Effect> = z.object({
   Name: z.string(),
   Kind: EffectKindSchema,
-  DamageSource: DamageSourceSchema,
-  Stacking: StackingRuleSchema,
+  DamageSource: DamageSourceSchema.optional().default('Physical'),
+  Stacking: StackingRuleSchema.optional().default({ kind: 'NoStack' }),
   Duration: DurationSchema,
   Visuals: VisualManifestSchema.optional().default({ ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined }),
   Modifiers: z.array(EffectModifierSchema),
@@ -273,7 +273,7 @@ const ActiveSkillSchema = z.object({
   Cooldown: z.number().optional(),
   CastingTime: z.number().optional(),
   Targeting: TargetingSchema,
-  Range: z.union([z.number(), z.tuple([z.number(), z.number()]).transform(([v, _size]) => v)]).optional(),
+  Range: z.union([z.number(), z.tuple([z.number(), z.number()]).transform(([v, size]) => v * size)]).optional(),
   Area: SkillAreaSchema,
   Delivery: DeliverySchema,
   ChargePhase: ChargeConfigSchema.optional(),
@@ -322,23 +322,32 @@ const CueTypeSchema = z.enum(['Visual', 'Audio', 'Damage', 'Communication', 'Mem
 
 const CueStrengthSchema = z.enum(['Weak', 'Moderate', 'Strong', 'Overwhelming']);
 
-const MovementTypeSchema = z.union([
-  z.string().refine((s) => s === 'Free').transform((): MovementType => 'Free'),
-  z.string().refine((s) => s === 'Stationary').transform((): MovementType => 'Stationary'),
-  z.object({ Type: z.literal('Tethered'), LeashDistance: z.number() }).transform((raw): MovementType => ({ kind: 'Tethered', leashDistance: raw.LeashDistance })),
-]);
+// Per the F# decoder, Tethered is parsed inside PerceptionConfig by reading
+// "MovementType" as string, and if it equals "tethered", reading the sibling
+// property "LeashDistance" from the same JSON object.  We handle that in the
+// PerceptionConfigSchema transform below.
 
 const PerceptionConfigSchema = z.object({
-  VisualRange: z.union([z.number(), z.tuple([z.number(), z.number()]).transform(([v, _size]) => v)]),
+  VisualRange: z.union([z.number(), z.tuple([z.number(), z.number()]).transform(([v, size]) => v * size)]),
   Fov: z.number(),
   MemoryDuration: z.number(),
-  MovementType: MovementTypeSchema.optional().default('Free'),
-}).transform((raw): PerceptionConfig => ({
-  visualRange: raw.VisualRange,
-  fov: raw.Fov,
-  memoryDuration: raw.MemoryDuration,
-  movementType: raw.MovementType,
-}));
+  MovementType: z.string().optional(),
+  LeashDistance: z.number().optional(),
+}).transform((raw): PerceptionConfig => {
+  const mvt = raw.MovementType?.toLowerCase() ?? 'free';
+  let movementType: MovementType;
+  if (mvt === 'free') movementType = 'Free';
+  else if (mvt === 'stationary') movementType = 'Stationary';
+  else if (mvt === 'tethered') movementType = { kind: 'Tethered', leashDistance: raw.LeashDistance ?? 200 };
+  else movementType = 'Free';
+
+  return {
+    visualRange: raw.VisualRange,
+    fov: raw.Fov,
+    memoryDuration: raw.MemoryDuration,
+    movementType,
+  };
+});
 
 const ResponseTypeSchema = z.enum(['Ignore', 'Investigate', 'Engage', 'Flee', 'Evade']);
 
@@ -494,11 +503,12 @@ const DecisionTreeSchema: z.ZodType<DecisionTree> = z.object({
 }));
 
 const AIFamilyConfigSchema: z.ZodType<AIFamilyConfig> = z.object({
+  StatScaling: z.record(z.string(), z.number()).optional().default({}),
   SkillPool: z.array(z.number().int()),
   PreferredIntent: z.enum(['Offensive', 'Supportive']),
   DecisionTree: z.string(),
 }).transform((raw): AIFamilyConfig => ({
-  StatScaling: new Map(),
+  StatScaling: new Map(Object.entries(raw.StatScaling)),
   SkillPool: raw.SkillPool.map(brandSkillId),
   PreferredIntent: raw.PreferredIntent,
   DecisionTree: raw.DecisionTree,

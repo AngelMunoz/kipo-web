@@ -1,21 +1,52 @@
-import type { Subscription } from 'rxjs';
-import { filter } from 'rxjs/operators';
-import type { EntityId, ScenarioId, SkillId } from '../types/branded';
-import { brandEntityId } from '../types/branded';
-import type { PomoEnvironment } from './environment';
-import type { WorldPosition } from '../domain/core';
-import type { SpawnEntityIntent, FactionSpawnInfo, RegisterSpawnZones } from '../domain/events';
-import type { AIController, AIArchetype, AIEntityDefinition, AIFamilyConfig } from '../domain/ai';
-import type { BaseStats, Resource } from '../domain/entity';
-import { Constants } from '../domain/constants';
+import type { Subscription } from "rxjs";
+import { filter } from "rxjs/operators";
+import type {
+  EntityId,
+  ScenarioId,
+  SkillId,
+  ItemInstanceId,
+} from "../types/branded";
+import {
+  brandEntityId,
+  brandSkillId,
+  brandItemId,
+  brandItemInstanceId,
+} from "../types/branded";
+import type { PomoEnvironment } from "./environment";
+import type { WorldPosition } from "../domain/core";
+import type {
+  SpawnEntityIntent,
+  FactionSpawnInfo,
+  RegisterSpawnZones,
+  GameAction,
+  SlotProcessing,
+} from "../domain/events";
+import type {
+  AIController,
+  AIArchetype,
+  AIEntityDefinition,
+  AIFamilyConfig,
+} from "../domain/ai";
+import type { BaseStats, Resource } from "../domain/entity";
+import type { ItemInstance, Slot } from "../domain/item";
+import { Constants } from "../domain/constants";
 
 // --- Internal Types ---
 
 interface PendingSpawn {
   EntityId: EntityId;
   ScenarioId: ScenarioId;
-  Type: import('../domain/events').SpawnType;
+  Type: import("../domain/events").SpawnType;
   Position: WorldPosition;
+  ActionSets:
+    | Map<
+        number,
+        Map<
+          import("../domain/events").GameAction,
+          import("../domain/events").SlotProcessing
+        >
+      >
+    | undefined;
   SpawnStartTime: number;
   Duration: number;
 }
@@ -31,7 +62,7 @@ interface SpawnZoneConfig {
   ZoneName: string;
   MaxSpawns: number;
   SpawnInfo: FactionSpawnInfo;
-  SpawnPositions: import('../domain/core').Vector2[];
+  SpawnPositions: import("../domain/core").Vector2[];
 }
 
 interface ScenarioSpawnConfig {
@@ -54,19 +85,22 @@ function createPlayerStats(): { baseStats: BaseStats; resource: Resource } {
     resource: {
       HP: baseStats.Charm * 10,
       MP: baseStats.Magic * 5,
-      Status: 'Alive',
+      Status: "Alive",
     },
   };
 }
 
-function createEnemyStats(archetype: AIArchetype): { baseStats: BaseStats; resource: Resource } {
+function createEnemyStats(archetype: AIArchetype): {
+  baseStats: BaseStats;
+  resource: Resource;
+} {
   const baseStats = archetype.baseStats;
   return {
     baseStats,
     resource: {
-      HP: baseStats.Charm * 10,
-      MP: baseStats.Magic * 5,
-      Status: 'Alive',
+      HP: baseStats.Charm,
+      MP: baseStats.Magic,
+      Status: "Alive",
     },
   };
 }
@@ -74,8 +108,8 @@ function createEnemyStats(archetype: AIArchetype): { baseStats: BaseStats; resou
 function resolveStats(
   familyConfig: AIFamilyConfig | undefined,
   aiEntity: AIEntityDefinition | undefined,
-  mapOverride: import('../domain/ai').MapEntityOverride | undefined,
-  baseStats: BaseStats
+  mapOverride: import("../domain/ai").MapEntityOverride | undefined,
+  baseStats: BaseStats,
 ): BaseStats {
   let result = { ...baseStats };
 
@@ -83,10 +117,18 @@ function resolveStats(
   if (familyConfig) {
     for (const [stat, multiplier] of familyConfig.StatScaling) {
       switch (stat) {
-        case 'Power': result.Power = Math.floor(result.Power * multiplier); break;
-        case 'Magic': result.Magic = Math.floor(result.Magic * multiplier); break;
-        case 'Sense': result.Sense = Math.floor(result.Sense * multiplier); break;
-        case 'Charm': result.Charm = Math.floor(result.Charm * multiplier); break;
+        case "Power":
+          result.Power = Math.floor(result.Power * multiplier);
+          break;
+        case "Magic":
+          result.Magic = Math.floor(result.Magic * multiplier);
+          break;
+        case "Sense":
+          result.Sense = Math.floor(result.Sense * multiplier);
+          break;
+        case "Charm":
+          result.Charm = Math.floor(result.Charm * multiplier);
+          break;
       }
     }
   }
@@ -109,7 +151,7 @@ function resolveStats(
 
 function resolveSkills(
   entitySkills: SkillId[],
-  mapOverride: import('../domain/ai').MapEntityOverride | undefined
+  mapOverride: import("../domain/ai").MapEntityOverride | undefined,
 ): SkillId[] {
   let skills: SkillId[] = [...entitySkills];
 
@@ -124,14 +166,92 @@ function resolveSkills(
   return skills;
 }
 
-function finalizeSpawn(
-  env: PomoEnvironment,
-  pending: PendingSpawn
-) {
+function createPlayerLoadout(): {
+  Items: ItemInstance[];
+  EquippedSlots: Array<{ slot: Slot; instanceId: ItemInstanceId }>;
+  ActionSets: Map<number, Map<GameAction, SlotProcessing>>;
+  ActiveActionSet: number;
+} {
+  const wizardHatId = brandItemInstanceId(
+    crypto.randomUUID ? crypto.randomUUID() : `hat-${Date.now()}`,
+  );
+  const magicStaffId = brandItemInstanceId(
+    crypto.randomUUID ? crypto.randomUUID() : `staff-${Date.now()}`,
+  );
+  const potionId = brandItemInstanceId(
+    crypto.randomUUID ? crypto.randomUUID() : `pot-${Date.now()}`,
+  );
+  const trollBloodId = brandItemInstanceId(
+    crypto.randomUUID ? crypto.randomUUID() : `troll-${Date.now()}`,
+  );
+
+  const wizardHat: ItemInstance = {
+    InstanceId: wizardHatId,
+    ItemId: brandItemId(4),
+    UsesLeft: undefined,
+  };
+  const magicStaff: ItemInstance = {
+    InstanceId: magicStaffId,
+    ItemId: brandItemId(5),
+    UsesLeft: undefined,
+  };
+  const potion: ItemInstance = {
+    InstanceId: potionId,
+    ItemId: brandItemId(2),
+    UsesLeft: 20,
+  };
+  const trollBlood: ItemInstance = {
+    InstanceId: trollBloodId,
+    ItemId: brandItemId(6),
+    UsesLeft: 20,
+  };
+
+  // Action sets matching F# createPlayerLoadout
+  const actionSet1 = new Map<GameAction, SlotProcessing>([
+    ["UseSlot1", { kind: "Skill", skillId: brandSkillId(7) }],
+    ["UseSlot2", { kind: "Skill", skillId: brandSkillId(8) }],
+    ["UseSlot3", { kind: "Skill", skillId: brandSkillId(3) }],
+    ["UseSlot4", { kind: "Skill", skillId: brandSkillId(2) }],
+    ["UseSlot5", { kind: "Skill", skillId: brandSkillId(4) }],
+    ["UseSlot6", { kind: "Skill", skillId: brandSkillId(5) }],
+  ]);
+
+  const actionSet2 = new Map<GameAction, SlotProcessing>([
+    ["UseSlot1", { kind: "Item", itemInstanceId: potionId }],
+    ["UseSlot2", { kind: "Item", itemInstanceId: trollBloodId }],
+  ]);
+
+  const actionSet3 = new Map<GameAction, SlotProcessing>([
+    ["UseSlot1", { kind: "Skill", skillId: brandSkillId(9) }],
+    ["UseSlot2", { kind: "Skill", skillId: brandSkillId(10) }],
+    ["UseSlot3", { kind: "Skill", skillId: brandSkillId(11) }],
+    ["UseSlot4", { kind: "Skill", skillId: brandSkillId(12) }],
+    ["UseSlot5", { kind: "Skill", skillId: brandSkillId(13) }],
+    ["UseSlot6", { kind: "Skill", skillId: brandSkillId(25) }],
+  ]);
+
+  const actionSets = new Map<number, Map<GameAction, SlotProcessing>>([
+    [1, actionSet1],
+    [2, actionSet2],
+    [3, actionSet3],
+  ]);
+
+  return {
+    Items: [wizardHat, magicStaff, potion, trollBlood],
+    EquippedSlots: [
+      { slot: "Head", instanceId: wizardHatId },
+      { slot: "Weapon", instanceId: magicStaffId },
+    ],
+    ActionSets: actionSets,
+    ActiveActionSet: 3,
+  };
+}
+
+function finalizeSpawn(env: PomoEnvironment, pending: PendingSpawn) {
   const entityId = pending.EntityId;
   const pos = pending.Position;
 
-  const snapshot: import('../domain/core').EntitySnapshot = {
+  const snapshot: import("../domain/core").EntitySnapshot = {
     Id: entityId,
     ScenarioId: pending.ScenarioId,
     Position: pos,
@@ -139,12 +259,13 @@ function finalizeSpawn(
   };
 
   switch (pending.Type.kind) {
-    case 'Player': {
+    case "Player": {
       const { baseStats, resource } = createPlayerStats();
-      const factions = new Set<'Player'>(['Player']);
+      const factions = new Set<"Player">(["Player"]);
+      const loadout = createPlayerLoadout();
 
-      // Minimal input map and action sets for player
-      const inputMap: import('../domain/events').InputMap = {
+      // Minimal input map
+      const inputMap: import("../domain/events").InputMap = {
         bindings: new Map(),
       };
 
@@ -153,22 +274,22 @@ function finalizeSpawn(
         Resources: resource,
         Factions: Array.from(factions),
         BaseStats: baseStats,
-        ModelConfig: 'HumanoidBase',
+        ModelConfig: "HumanoidBase",
         InputMap: inputMap,
-        ActionSets: new Map(),
-        ActiveActionSet: 0,
-        InventoryItems: [],
-        EquippedSlots: [],
+        ActionSets: loadout.ActionSets,
+        ActiveActionSet: loadout.ActiveActionSet,
+        InventoryItems: loadout.Items,
+        EquippedSlots: loadout.EquippedSlots,
         AIController: undefined,
       });
       break;
     }
-    case 'Faction': {
+    case "Faction": {
       const info = pending.Type.info;
       const archetype = env.stores.aiArchetypeStore.tryFind(info.ArchetypeId);
       if (!archetype) return;
 
-      const assignedFaction = info.Faction ?? 'Enemy';
+      const assignedFaction = info.Faction ?? "Enemy";
       const factions = new Set([assignedFaction]);
 
       // Look up entity definition
@@ -189,7 +310,12 @@ function finalizeSpawn(
       }
 
       const { baseStats, resource } = createEnemyStats(archetype);
-      const resolvedStats = resolveStats(familyConfig, aiEntity, info.MapOverride, baseStats);
+      const resolvedStats = resolveStats(
+        familyConfig,
+        aiEntity,
+        info.MapOverride,
+        baseStats,
+      );
 
       // Resolve skills
       let skills: SkillId[] = [];
@@ -201,11 +327,12 @@ function finalizeSpawn(
       const controller: AIController = {
         controlledEntityId: entityId,
         archetypeId: info.ArchetypeId,
-        currentState: 'Idle',
+        currentState: "Idle",
         stateEnterTime: 0,
         spawnPosition: { X: pos.X, Y: pos.Z }, // AI uses XZ as 2D
         absoluteWaypoints:
-          archetype.behaviorType === 'Patrol' || archetype.behaviorType === 'Aggressive'
+          archetype.behaviorType === "Patrol" ||
+          archetype.behaviorType === "Aggressive"
             ? [
                 { X: pos.X, Y: pos.Z },
                 { X: pos.X + 100, Y: pos.Z },
@@ -216,13 +343,13 @@ function finalizeSpawn(
         waypointIndex: 0,
         lastDecisionTime: 0,
         currentTarget: undefined,
-        decisionTree: aiEntity?.DecisionTree ?? 'MeleeAttacker',
-        preferredIntent: familyConfig?.PreferredIntent ?? 'Offensive',
+        decisionTree: aiEntity?.DecisionTree ?? "MeleeAttacker",
+        preferredIntent: familyConfig?.PreferredIntent ?? "Offensive",
         skills,
         memories: new Map(),
       };
 
-      const modelConfig = aiEntity?.Model ?? 'HumanoidBase';
+      const modelConfig = aiEntity?.Model ?? "HumanoidBase";
 
       env.core.stateWrite.ApplyEntitySpawnBundle({
         Snapshot: snapshot,
@@ -249,7 +376,9 @@ export interface EntitySpawnerSystem {
   dispose(): void;
 }
 
-export function createEntitySpawnerSystem(env: PomoEnvironment): EntitySpawnerSystem {
+export function createEntitySpawnerSystem(
+  env: PomoEnvironment,
+): EntitySpawnerSystem {
   const pendingSpawns: PendingSpawn[] = [];
   const spawnDuration = Constants.Spawning.DefaultDuration;
 
@@ -278,19 +407,24 @@ export function createEntitySpawnerSystem(env: PomoEnvironment): EntitySpawnerSy
 
   function findAvailableZone(
     scenarioId: ScenarioId,
-    faction: string | undefined
+    faction: string | undefined,
   ): SpawnZoneConfig | undefined {
     const config = scenarioConfigs.get(scenarioId);
-    if (!config || getScenarioCount(scenarioId) >= config.MaxEnemies) return undefined;
+    if (!config || getScenarioCount(scenarioId) >= config.MaxEnemies)
+      return undefined;
 
     const matchingZones = faction
-      ? zonesByFaction.get(`${scenarioId}:${faction}`) ?? []
+      ? (zonesByFaction.get(`${scenarioId}:${faction}`) ?? [])
       : config.Zones;
 
-    return matchingZones.find((z) => getZoneCount(scenarioId, z.ZoneName) < z.MaxSpawns);
+    return matchingZones.find(
+      (z) => getZoneCount(scenarioId, z.ZoneName) < z.MaxSpawns,
+    );
   }
 
-  function getRandomSpawnPosition(zone: SpawnZoneConfig): import('../domain/core').Vector2 {
+  function getRandomSpawnPosition(
+    zone: SpawnZoneConfig,
+  ): import("../domain/core").Vector2 {
     const idx = Math.floor(Math.random() * zone.SpawnPositions.length);
     return zone.SpawnPositions[idx] ?? { X: 0, Y: 0 };
   }
@@ -298,9 +432,14 @@ export function createEntitySpawnerSystem(env: PomoEnvironment): EntitySpawnerSy
   // Subscribe to RegisterSpawnZones
   const registerSub = env.core.eventBus.events$
     .pipe(
-      filter((e): e is { kind: 'Spawn'; spawning: { kind: 'RegisterZones'; zones: RegisterSpawnZones } } =>
-        e.kind === 'Spawn' && e.spawning.kind === 'RegisterZones'
-      )
+      filter(
+        (
+          e,
+        ): e is {
+          kind: "Spawn";
+          spawning: { kind: "RegisterZones"; zones: RegisterSpawnZones };
+        } => e.kind === "Spawn" && e.spawning.kind === "RegisterZones",
+      ),
     )
     .subscribe((e) => {
       const event = e.spawning.zones;
@@ -337,21 +476,27 @@ export function createEntitySpawnerSystem(env: PomoEnvironment): EntitySpawnerSy
   // Subscribe to SpawnEntity
   const spawnSub = env.core.eventBus.events$
     .pipe(
-      filter((e): e is { kind: 'Spawn'; spawning: { kind: 'SpawnEntity'; spawn: SpawnEntityIntent } } =>
-        e.kind === 'Spawn' && e.spawning.kind === 'SpawnEntity'
-      )
+      filter(
+        (
+          e,
+        ): e is {
+          kind: "Spawn";
+          spawning: { kind: "SpawnEntity"; spawn: SpawnEntityIntent };
+        } => e.kind === "Spawn" && e.spawning.kind === "SpawnEntity",
+      ),
     )
     .subscribe((e) => {
       const intent = e.spawning.spawn;
       const totalGameTime = env.core.world.Time.TotalGameTime;
 
-      const duration = intent.Type.kind === 'Player' ? 0 : spawnDuration;
+      const duration = intent.Type.kind === "Player" ? 0 : spawnDuration;
 
       const pending: PendingSpawn = {
         EntityId: intent.EntityId,
         ScenarioId: intent.ScenarioId,
         Type: intent.Type,
         Position: intent.Position,
+        ActionSets: intent.ActionSets,
         SpawnStartTime: totalGameTime,
         Duration: duration,
       };
@@ -359,7 +504,7 @@ export function createEntitySpawnerSystem(env: PomoEnvironment): EntitySpawnerSy
       pendingSpawns.push(pending);
 
       // Track spawn info for respawning (only for Faction spawns)
-      if (intent.Type.kind === 'Faction') {
+      if (intent.Type.kind === "Faction") {
         const info = intent.Type.info;
         spawnedEntities.set(intent.EntityId, {
           EntityId: intent.EntityId,
@@ -374,7 +519,10 @@ export function createEntitySpawnerSystem(env: PomoEnvironment): EntitySpawnerSy
 
         if (info.SpawnZoneName) {
           const key = `${intent.ScenarioId}:${info.SpawnZoneName}`;
-          const currentZoneCount = getZoneCount(intent.ScenarioId, info.SpawnZoneName);
+          const currentZoneCount = getZoneCount(
+            intent.ScenarioId,
+            info.SpawnZoneName,
+          );
           zoneCurrentCounts.set(key, currentZoneCount + 1);
         }
       }
@@ -385,9 +533,17 @@ export function createEntitySpawnerSystem(env: PomoEnvironment): EntitySpawnerSy
   // Subscribe to EntityDied for respawn handling
   const deathSub = env.core.eventBus.events$
     .pipe(
-      filter((e): e is { kind: 'Lifecycle'; lifecycle: { kind: 'EntityDied'; died: import('../domain/events').EntityDied } } =>
-        e.kind === 'Lifecycle' && e.lifecycle.kind === 'EntityDied'
-      )
+      filter(
+        (
+          e,
+        ): e is {
+          kind: "Lifecycle";
+          lifecycle: {
+            kind: "EntityDied";
+            died: import("../domain/events").EntityDied;
+          };
+        } => e.kind === "Lifecycle" && e.lifecycle.kind === "EntityDied",
+      ),
     )
     .subscribe((e) => {
       const event = e.lifecycle.died;
@@ -404,30 +560,35 @@ export function createEntitySpawnerSystem(env: PomoEnvironment): EntitySpawnerSy
 
       // Decrement counts
       const currentScenarioCount = getScenarioCount(event.ScenarioId);
-      scenarioCurrentCounts.set(event.ScenarioId, Math.max(0, currentScenarioCount - 1));
+      scenarioCurrentCounts.set(
+        event.ScenarioId,
+        Math.max(0, currentScenarioCount - 1),
+      );
 
       if (info.SpawnZoneName) {
         const key = `${event.ScenarioId}:${info.SpawnZoneName}`;
-        const currentZoneCount = getZoneCount(event.ScenarioId, info.SpawnZoneName);
+        const currentZoneCount = getZoneCount(
+          event.ScenarioId,
+          info.SpawnZoneName,
+        );
         zoneCurrentCounts.set(key, Math.max(0, currentZoneCount - 1));
       }
 
       // Find an available zone for this faction and respawn
-      const zone = findAvailableZone(
-        event.ScenarioId,
-        info.SpawnInfo.Faction
-      );
+      const zone = findAvailableZone(event.ScenarioId, info.SpawnInfo.Faction);
 
       if (!zone) return; // No available zone, don't respawn
 
-      const newEntityId = brandEntityId(`entity-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      const newEntityId = brandEntityId(
+        `entity-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
       const newPosition = getRandomSpawnPosition(zone);
 
       const respawnIntent: SpawnEntityIntent = {
         EntityId: newEntityId,
         ScenarioId: event.ScenarioId,
         Type: {
-          kind: 'Faction',
+          kind: "Faction",
           info: {
             ...info.SpawnInfo,
             SpawnZoneName: zone.ZoneName,
@@ -437,8 +598,8 @@ export function createEntitySpawnerSystem(env: PomoEnvironment): EntitySpawnerSy
       };
 
       env.core.eventBus.publish({
-        kind: 'Spawn',
-        spawning: { kind: 'SpawnEntity', spawn: respawnIntent },
+        kind: "Spawn",
+        spawning: { kind: "SpawnEntity", spawn: respawnIntent },
       });
     });
 
