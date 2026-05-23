@@ -11,6 +11,7 @@ import { createStateWriteService } from "../systems/state-write";
 import { createEventBus } from "../events/event-bus";
 import { createSeededPRNG } from "../utils/rng";
 import { createMovementSystem } from "../systems/movement";
+import { createNavigationSystem } from "../systems/navigation";
 import { createAISystem } from "../systems/ai-system";
 import { createGameplayLoop } from "../gameplay-loop";
 import type { EffectApplicationSystem } from "../systems/effect-application";
@@ -296,6 +297,7 @@ describe("AI System", () => {
       0,
     );
     const movement = createMovementSystem(env);
+    createNavigationSystem(env);
     const ai = createAISystem(env);
 
     const stubEffectApp: EffectApplicationSystem = {
@@ -472,6 +474,7 @@ describe("AI System", () => {
       0,
     );
     const movement = createMovementSystem(env);
+    createNavigationSystem(env);
     const ai = createAISystem(env);
 
     const stubEffectApp: EffectApplicationSystem = {

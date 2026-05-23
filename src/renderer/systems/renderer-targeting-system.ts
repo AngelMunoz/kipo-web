@@ -16,10 +16,12 @@ export interface TargetingSystem {
 }
 
 const ENTITY_CLICK_RADIUS = 150;
+const TARGET_ENTITY_MODES: ReadonlySet<string> = new Set(['TargetEntity', 'Self']);
 
 export function createTargetingSystem(scene: GameplayScene): TargetingSystem {
   let active = false;
   let activeSlot: GameAction | null = null;
+  let activeTargetingMode: string | null = null;
   let targetingGfx: Phaser.GameObjects.Graphics | null = null;
   let rangeCircle: Phaser.GameObjects.Arc | null = null;
   const subscriptions: Subscription[] = [];
@@ -55,6 +57,25 @@ export function createTargetingSystem(scene: GameplayScene): TargetingSystem {
     subscriptions.push(sub);
   }
 
+  function resolveTargetingMode(slot: GameAction): string | null {
+    const world = scene.getWorld();
+    const skillStore = scene.getSkillStore();
+    if (!world || !skillStore) return null;
+
+    const actionSets = world.ActionSets.get(PLAYER_ENTITY_ID);
+    if (!actionSets) return null;
+
+    const activeSetIndex = world.ActiveActionSets.get(PLAYER_ENTITY_ID) ?? 1;
+    const actionSet = actionSets.get(activeSetIndex);
+    if (!actionSet) return null;
+
+    const slotProcessing = actionSet.get(slot);
+    if (!slotProcessing || slotProcessing.kind !== 'Skill') return null;
+
+    const skill = skillStore.getActive(slotProcessing.skillId);
+    return skill?.Targeting ?? null;
+  }
+
   function isTargeting() {
     return active;
   }
@@ -62,6 +83,7 @@ export function createTargetingSystem(scene: GameplayScene): TargetingSystem {
   function enterTargeting(slot: GameAction) {
     active = true;
     activeSlot = slot;
+    activeTargetingMode = resolveTargetingMode(slot);
 
     if (!targetingGfx) {
       targetingGfx = scene.add.graphics();
@@ -82,6 +104,7 @@ export function createTargetingSystem(scene: GameplayScene): TargetingSystem {
   function exitTargeting() {
     active = false;
     activeSlot = null;
+    activeTargetingMode = null;
     targetingGfx?.clear();
     rangeCircle?.destroy();
     rangeCircle = null;
@@ -115,32 +138,34 @@ export function createTargetingSystem(scene: GameplayScene): TargetingSystem {
     const eventBus = scene.getEventBus();
     if (!eventBus) return;
 
-    const clickedEntity = findEntityAt(worldX, worldY);
-
-    // Publish raw TargetSelection; engine-side TargetingSystem handles range/skill logic
-    if (clickedEntity) {
-      eventBus.publish({
-        kind: "Intent",
-        intent: {
-          kind: "TargetSelection",
-          target: {
-            Selector: PLAYER_ENTITY_ID,
-            Selection: { kind: "SelectedEntity", entity: brandEntityId(clickedEntity) },
+    if (activeTargetingMode && TARGET_ENTITY_MODES.has(activeTargetingMode)) {
+      const clickedEntity = findEntityAt(worldX, worldY);
+      if (clickedEntity) {
+        eventBus.publish({
+          kind: "Intent",
+          intent: {
+            kind: "TargetSelection",
+            target: {
+              Selector: PLAYER_ENTITY_ID,
+              Selection: { kind: "SelectedEntity", entity: brandEntityId(clickedEntity) },
+            },
           },
-        },
-      });
-    } else {
-      eventBus.publish({
-        kind: "Intent",
-        intent: {
-          kind: "TargetSelection",
-          target: {
-            Selector: PLAYER_ENTITY_ID,
-            Selection: { kind: "SelectedPosition", position: { X: worldX, Y: worldY } },
-          },
-        },
-      });
+        });
+        exitTargeting();
+        return;
+      }
     }
+
+    eventBus.publish({
+      kind: "Intent",
+      intent: {
+        kind: "TargetSelection",
+        target: {
+          Selector: PLAYER_ENTITY_ID,
+          Selection: { kind: "SelectedPosition", position: { X: worldX, Y: worldY } },
+        },
+      },
+    });
 
     exitTargeting();
   }

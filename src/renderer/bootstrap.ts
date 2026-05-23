@@ -13,15 +13,26 @@ import { createTargetingSystem as createEngineTargetingSystem } from '../kipo-en
 import { createProjectileSystem } from '../kipo-engine/systems/projectile';
 import { createNotificationSystem } from '../kipo-engine/systems/notification';
 import { createResourceManagerSystem } from '../kipo-engine/systems/resource-manager';
+import { createNavigationSystem } from '../kipo-engine/systems/navigation';
 import type { ProjectionService, CameraService } from '../kipo-engine/systems/environment';
-import type { MovementSnapshot } from '../kipo-engine/state/projections';
-import { MovementSnapshotEmpty, calculateDerivedStatsForEntity } from '../kipo-engine/state/projections';
+import type { ScenarioId } from '../kipo-engine/types/branded';
+import { computeMovementSnapshot, getNearbyEntitiesSnapshot, calculateDerivedStatsForEntity } from '../kipo-engine/state/projections';
 
-function createProjectionService(): ProjectionService {
+function createProjectionService(world: MutableWorld): ProjectionService {
     return {
-        computeMovementSnapshot: (_scenarioId: string): MovementSnapshot => MovementSnapshotEmpty,
-        getNearbyEntitiesSnapshot: (_snapshot, _liveEntities, _center, _radius) => [],
-        calculateDerivedStats: (world, itemStore, entityId) => calculateDerivedStatsForEntity(world, itemStore, entityId)
+        computeMovementSnapshot(scenarioId) {
+            return computeMovementSnapshot(
+                0,
+                world.Positions,
+                world.Velocities,
+                world.Rotations,
+                world.ModelConfigId,
+                world.EntityScenario,
+                scenarioId as ScenarioId,
+            );
+        },
+        getNearbyEntitiesSnapshot,
+        calculateDerivedStats: (w, itemStore, entityId) => calculateDerivedStatsForEntity(w, itemStore, entityId),
     };
 }
 
@@ -74,7 +85,7 @@ export async function bootstrapGame(): Promise<GameBootstrap> {
     };
 
     const gameplay: GameplayServices = {
-        projections: createProjectionService(),
+        projections: createProjectionService(mutableWorld),
         cameraService: createCameraService()
     };
 
@@ -91,6 +102,7 @@ export async function bootstrapGame(): Promise<GameBootstrap> {
     const projectile = createProjectileSystem(env);
     const notification = createNotificationSystem(env);
     const resourceManager = createResourceManagerSystem(env);
+    createNavigationSystem(env);
 
     const [
         { createCombatSystem },

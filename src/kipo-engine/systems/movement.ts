@@ -1,9 +1,7 @@
-import type { Subscription } from 'rxjs';
-import { filter } from 'rxjs/operators';
 import type { EntityId } from '../types/branded';
 import type { PomoEnvironment } from './environment';
 import type { Vector2 } from '../domain/core';
-import { toVector2, fromVector2, vector2Distance, vector2Normalize } from '../domain/core';
+import { toVector2, vector2Distance, vector2Normalize } from '../domain/core';
 
 // --- Movement Target Handling ---
 
@@ -117,32 +115,11 @@ function updatePositions(world: import('../domain/world').MutableWorld, dt: numb
 }
 
 export function createMovementSystem(env: PomoEnvironment): MovementSystem {
-  const subscriptions: Subscription[] = [];
-
-  // Listen for SetMovementTarget intents
-  const sub = env.core.eventBus.events$
-    .pipe(
-      filter((e): e is { kind: 'Intent'; intent: { kind: 'MovementTarget'; movement: import('../domain/events').SetMovementTarget } } =>
-        e.kind === 'Intent' && e.intent.kind === 'MovementTarget'
-      )
-    )
-    .subscribe((e) => {
-      const cmd = e.intent.movement;
-      env.core.stateWrite.UpdateMovementState(cmd.EntityId, {
-        kind: 'MovingTo',
-        targetPosition: fromVector2(cmd.Target),
-      });
-    });
-
-  subscriptions.push(sub);
-
   return {
     update(dt) {
       updateMovementTargets(env);
       updatePositions(env.core.world, dt);
     },
-    dispose() {
-      for (const s of subscriptions) s.unsubscribe();
-    },
+    dispose() {},
   };
 }

@@ -25,7 +25,10 @@ export function createProjectileSystem(
 
       let sprite = sprites.get(entityId);
       if (!sprite) {
-        const textureKey = liveProj.Info.Visuals.ModelId ?? "arrow";
+        const modelId = liveProj.Info.Visuals.ModelId;
+        const textureKey = modelId && scene.textures.exists(modelId) ? modelId
+          : scene.textures.exists("arrow") ? "arrow"
+          : "__WHITE";
         console.debug(
           "[RendererProjectile] Creating sprite for",
           entityId,
@@ -34,6 +37,8 @@ export function createProjectileSystem(
           pos.Z,
           "texture:",
           textureKey,
+          "modelId:",
+          modelId,
         );
         sprite = scene.add.sprite(pos.X, pos.Z, textureKey);
         sprite.setOrigin(0.5, 0.5);

@@ -322,6 +322,8 @@ function handleEffectResourceIntent(env: PomoEnvironment, intent: import('../dom
   const attackerStats = env.gameplay.projections.calculateDerivedStats?.(env.core.worldView, env.stores.itemStore, intent.SourceEntity);
   if (!attackerStats) return;
 
+  let anyProcessed = false;
+
   for (const modifier of intent.Effect.Modifiers) {
     if (modifier.kind === 'ResourceChange') {
       const changeAmount = calculateEffectRestoration(attackerStats, modifier.amount);
@@ -336,10 +338,13 @@ function handleEffectResourceIntent(env: PomoEnvironment, intent: import('../dom
           },
         },
       });
+      anyProcessed = true;
     }
   }
 
-  env.core.stateWrite.ExpireEffect(intent.TargetEntity, intent.ActiveEffectId);
+  if (anyProcessed && intent.Effect.Duration.kind === 'Instant') {
+    env.core.stateWrite.ExpireEffect(intent.TargetEntity, intent.ActiveEffectId);
+  }
 }
 
 function handleEffectDamageIntent(env: PomoEnvironment, intent: import('../domain/events').EffectDamageIntent) {
@@ -494,7 +499,9 @@ function handleAbilityIntent(env: PomoEnvironment, intent: AbilityIntent) {
     }
 
     env.core.stateWrite.UpdateActiveCharge(intent.Caster, {
-      ...skill.ChargePhase,
+      SkillId: intent.SkillId,
+      Target: intent.Target,
+      Duration: skill.ChargePhase.Duration,
       startTime: env.core.worldView.Time.TotalGameTime,
     });
     env.core.stateWrite.SetPendingSkillCast(intent.Caster, intent.SkillId, intent.Target);

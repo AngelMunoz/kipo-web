@@ -9,6 +9,28 @@ import type { EquipmentSystem } from "./systems/equipment";
 import type { EntitySpawnerSystem } from "./systems/entity-spawner";
 import type { NotificationSystem } from "./systems/notification";
 import type { AbilityActivationSystem } from "./systems/ability-activation";
+import type { MutableWorld } from "./domain/world";
+import type { IStateWriteService } from "./systems/state-write";
+
+function processChargeExpiry(world: MutableWorld, totalTime: number, stateWrite: IStateWriteService, eventBus: import("./events/event-bus").EventBus) {
+  for (const [casterId, charge] of world.ActiveCharges) {
+    if (totalTime - charge.startTime >= charge.Duration) {
+      eventBus.publish({
+        kind: 'Lifecycle',
+        lifecycle: {
+          kind: 'ChargeCompleted',
+          charge: {
+            CasterId: casterId,
+            SkillId: charge.SkillId,
+            Target: charge.Target,
+          },
+        },
+      });
+      stateWrite.RemoveActiveCharge(casterId);
+      stateWrite.RemoveActiveOrbital(casterId);
+    }
+  }
+}
 
 export interface GameplayLoop {
   update(dt: number): void;
@@ -60,6 +82,7 @@ export function createGameplayLoop(
       systems.combat.update(dt);
       systems.resourceManager.update(previous + dt, dt);
       systems.projectile.update(dt);
+      processChargeExpiry(world, previous + dt, env.core.stateWrite, env.core.eventBus);
       systems.movement.update(dt);
       systems.ai.update();
       systems.entitySpawner.update();

@@ -4,7 +4,7 @@ import type { WorldPosition, Vector3, WorldText } from '../domain/core';
 import { Vector3Zero } from '../domain/core';
 import type { Resource } from '../domain/entity';
 import type { MovementState, GameAction, InputActionState, RawInputState, SkillTarget } from '../domain/events';
-import type { ActiveEffect, ChargeConfig, OrbitalConfig } from '../domain/skill';
+import type { ActiveEffect, OrbitalConfig } from '../domain/skill';
 import type { LiveProjectile } from '../domain/projectile';
 import type { ItemInstance, Slot } from '../domain/item';
 import type { AIController } from '../domain/ai';
@@ -41,7 +41,7 @@ type AdaptiveCommand =
   | { kind: 'ApplyEntitySpawnBundle'; bundle: import('../domain/events').EntitySpawnBundle }
   | { kind: 'UpdateActiveOrbital'; entityId: EntityId; orbital: OrbitalConfig & { startTime: number } }
   | { kind: 'RemoveActiveOrbital'; entityId: EntityId }
-  | { kind: 'UpdateActiveCharge'; entityId: EntityId; charge: ChargeConfig & { startTime: number } }
+  | { kind: 'UpdateActiveCharge'; entityId: EntityId; charge: import('../domain/world').ActiveCharge }
   | { kind: 'RemoveActiveCharge'; entityId: EntityId }
   | { kind: 'AddNotification'; notification: WorldText }
   | { kind: 'SetNotifications'; notifications: WorldText[] }
@@ -128,7 +128,7 @@ export interface IStateWriteService {
 
   UpdateActiveOrbital(entityId: EntityId, orbital: OrbitalConfig & { startTime: number }): void;
   RemoveActiveOrbital(entityId: EntityId): void;
-  UpdateActiveCharge(entityId: EntityId, charge: ChargeConfig & { startTime: number }): void;
+  UpdateActiveCharge(entityId: EntityId, charge: import('../domain/world').ActiveCharge): void;
   RemoveActiveCharge(entityId: EntityId): void;
 
   AddNotification(notification: WorldText): void;
@@ -146,6 +146,32 @@ export interface IStateWriteService {
 }
 
 // --- Implementation ---
+
+function syncEntityCombatStatuses(world: MutableWorld, entityId: EntityId) {
+  const effects = world.ActiveEffects.get(entityId);
+  const statuses: import('../domain/core').CombatStatus[] = [];
+  if (effects) {
+    for (const e of effects) {
+      switch (e.SourceEffect.Kind) {
+        case 'Stun':
+          if (!statuses.some((s) => s.kind === 'Stunned')) {
+            statuses.push({ kind: 'Stunned' } as import('../domain/core').CombatStatus);
+          }
+          break;
+        case 'Silence':
+          if (!statuses.some((s) => s.kind === 'Silenced')) {
+            statuses.push({ kind: 'Silenced' } as import('../domain/core').CombatStatus);
+          }
+          break;
+      }
+    }
+  }
+  if (statuses.length === 0) {
+    world.CombatStatuses.delete(entityId);
+  } else {
+    world.CombatStatuses.set(entityId, statuses);
+  }
+}
 
 function applyNonAdaptive(world: MutableWorld, cmd: NonAdaptiveCommand) {
   if (!world.EntityExists.has(cmd.entityId)) return;
@@ -212,6 +238,7 @@ function applyAdaptive(world: MutableWorld, time: number, cmd: AdaptiveCommand) 
       } else {
         world.ActiveEffects.set(cmd.entityId, [cmd.effect]);
       }
+      syncEntityCombatStatuses(world, cmd.entityId);
       break;
     }
     case 'ExpireEffect': {
@@ -224,6 +251,7 @@ function applyAdaptive(world: MutableWorld, time: number, cmd: AdaptiveCommand) 
           world.ActiveEffects.set(cmd.entityId, filtered);
         }
       }
+      syncEntityCombatStatuses(world, cmd.entityId);
       break;
     }
     case 'RefreshEffect': {

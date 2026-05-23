@@ -1,5 +1,13 @@
 import type { Time, WorldText } from './core';
 import type { EntityId, ScenarioId, SkillId, ItemInstanceId } from '../types/branded';
+import type { SkillTarget } from './events';
+
+export interface ActiveCharge {
+  SkillId: SkillId;
+  Target: SkillTarget;
+  startTime: number;
+  Duration: number;
+}
 
 export interface Scenario {
   Id: ScenarioId;
@@ -25,7 +33,7 @@ export interface MutableWorld {
   LiveProjectiles: Map<EntityId, import('./projectile').LiveProjectile>;
   InCombatUntil: Map<EntityId, number>; // seconds
   PendingSkillCast: Map<EntityId, { skillId: SkillId; target: import('./events').SkillTarget }>;
-  ActiveCharges: Map<EntityId, import('./skill').ChargeConfig & { startTime: number }>;
+  ActiveCharges: Map<EntityId, ActiveCharge>;
   ActiveOrbitals: Map<EntityId, import('./skill').OrbitalConfig & { startTime: number }>;
   VisualEffects: import('./core').WorldText[]; // Actually VisualEffect placeholder
   Notifications: WorldText[];
@@ -83,7 +91,7 @@ export interface World {
   Poses: Map<EntityId, Map<string, import('./core').Vector3>>;
   ActiveAnimations: Map<EntityId, AnimationState[]>;
   ActiveOrbitals: Map<EntityId, import('./skill').OrbitalConfig & { startTime: number }>;
-  ActiveCharges: Map<EntityId, import('./skill').ChargeConfig & { startTime: number }>;
+  ActiveCharges: Map<EntityId, ActiveCharge>;
   VisualEffects: import('./core').WorldText[];
   Notifications: WorldText[];
 }

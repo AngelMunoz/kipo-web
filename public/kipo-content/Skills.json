@@ -677,9 +677,9 @@
         "Visuals": { "Vfx": "HealingSparkles" },
         "Modifiers": [
           {
-            "Type": "AbilityDamageMod",
-            "AbilityDamageValue": "MA * 2.0",
-            "Element": "Light"
+            "Type": "ResourceChange",
+            "Resource": "HP",
+            "Amount": "MA * 2.0"
           }
         ]
       }
@@ -751,9 +751,9 @@
         "Visuals": { "Vfx": "Regenerating" },
         "Modifiers": [
           {
-            "Type": "AbilityDamageMod",
-            "AbilityDamageValue": "MA * 0.5",
-            "Element": "Light"
+            "Type": "ResourceChange",
+            "Resource": "HP",
+            "Amount": "MA * 0.5"
           }
         ]
       }

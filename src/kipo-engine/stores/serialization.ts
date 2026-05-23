@@ -276,7 +276,7 @@ const ActiveSkillSchema = z.object({
   Range: z.union([z.number(), z.tuple([z.number(), z.number()]).transform(([v, size]) => v * size)]).optional(),
   Area: SkillAreaSchema,
   Delivery: DeliverySchema,
-  ChargePhase: ChargeConfigSchema.optional(),
+  Charge: ChargeConfigSchema.optional(),
   Formula: FormulaSchema.optional(),
   ElementFormula: z.object({ Element: ElementSchema, Formula: FormulaSchema }).optional(),
   Effects: z.array(EffectSchema),
@@ -307,7 +307,7 @@ const SkillSchema: z.ZodType<Skill> = z.discriminatedUnion('Kind', [
     Cooldown: rest.Cooldown ?? undefined,
     CastingTime: rest.CastingTime ?? undefined,
     Range: rest.Range ?? undefined,
-    ChargePhase: rest.ChargePhase ?? undefined,
+    ChargePhase: rest.Charge ?? undefined,
     Formula: rest.Formula ?? undefined,
     ElementFormula: rest.ElementFormula ?? undefined,
   };
