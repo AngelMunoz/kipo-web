@@ -330,13 +330,14 @@ export class GameplayScene extends Phaser.Scene {
     // InstantSkillImpact → spawn impact particles for instant-delivery skills
     events$.subscribe((e) => {
       if (e.kind !== "Lifecycle" || e.lifecycle.kind !== "InstantSkillImpact") return;
-      const { VfxId, Position: pos } = e.lifecycle.impact;
-      console.debug('[RendererVFX] InstantSkillImpact:', VfxId, 'at', pos.X, pos.Y);
-      this.particleSystem!.spawnEffect(VfxId, {
+      const { VfxId, Position: pos, Direction: dir } = e.lifecycle.impact;
+      const rotation = Math.atan2(dir.Y, dir.X) * 180 / Math.PI;
+      const spawnedId = this.particleSystem!.spawnEffect(VfxId, {
         X: pos.X,
         Y: 0,
         Z: pos.Y,
-      });
+      }, undefined, rotation);
+      console.debug('[RendererVFX] InstantSkillImpact:', VfxId, 'at', pos.X, pos.Y, 'dir:', dir, 'rot:', rotation, 'spawnedId:', spawnedId);
     });
   }
 

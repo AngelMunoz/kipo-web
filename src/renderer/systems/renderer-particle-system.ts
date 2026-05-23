@@ -13,7 +13,7 @@ import { hexToRgba } from "../domain/particles";
 export interface ParticleSystem {
   update(dt: number, getEntityPosition: (id: string) => Vector3 | undefined): void;
   render(): void;
-  spawnEffect(vfxId: string, position: Vector3, ownerId?: string): string | undefined;
+  spawnEffect(vfxId: string, position: Vector3, ownerId?: string, rotation?: number): string | undefined;
   removeEffect(effectId: string): void;
   getActiveEffects(): readonly PhaserEffect[];
   destroy(): void;
@@ -32,6 +32,7 @@ interface PhaserEffect {
 function emitterConfigToPhaser(
   cfg: EmitterConfig,
   textureKey: string | undefined,
+  rotation?: number,
 ): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig {
   const pc = cfg.Particle;
   const texKey = textureKey ?? "__WHITE";
@@ -41,6 +42,18 @@ function emitterConfigToPhaser(
     const endCol = hexToRgba(pc.ColorEnd);
     const startTint = (Math.round(startCol.r * 255) << 16) | (Math.round(startCol.g * 255) << 8) | Math.round(startCol.b * 255);
     const endTint = (Math.round(endCol.r * 255) << 16) | (Math.round(endCol.g * 255) << 8) | Math.round(endCol.b * 255);
+
+    // Calculate emission angle centered on rotation for Cone shapes
+    let angleMin: number;
+    let angleMax: number;
+    if (cfg.Shape === "Cone") {
+      const centerAngle = rotation ?? 0;
+      angleMin = centerAngle - (cfg.Angle / 2);
+      angleMax = centerAngle + (cfg.Angle / 2);
+    } else {
+      angleMin = 0;
+      angleMax = 360;
+    }
 
     const config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
       texture: texKey,
@@ -65,13 +78,11 @@ function emitterConfigToPhaser(
       tint: { start: startTint, end: endTint, random: true },
       alpha: { start: startCol.a, end: endCol.a, random: true },
 
-      // Angle — restrict emission cone for Cone shapes
-      angle: cfg.Shape === "Cone"
-        ? { min: -(cfg.Angle / 2), max: (cfg.Angle / 2) }
-        : { min: 0, max: 360 },
+      // Angle — restricts emission direction; radial must be true for this to take effect
+      angle: { min: angleMin, max: angleMax },
 
-      // Don't use radial for Cone — it would emit in 360 degrees
-      radial: cfg.Shape === "Sphere" || cfg.Shape === "Point",
+      // radial must be true for angle/speed to control particle velocity in Phaser 4
+      radial: true,
 
       // Gravity
       gravityX: 0,
@@ -79,10 +90,6 @@ function emitterConfigToPhaser(
 
       // Blend mode
       blendMode: cfg.BlendMode === "Additive" ? "ADD" : "NORMAL",
-
-      // Max particles
-      maxParticles: Math.max(100, cfg.Rate * (pc.Lifetime[1] + 1)) | 0,
-      maxAliveParticles: Math.max(100, cfg.Rate * (pc.Lifetime[1] + 1)) | 0,
     };
 
   return config;
@@ -110,20 +117,23 @@ export function createParticleSystem(
   }
 
   return {
-    spawnEffect(vfxId: string, position: Vector3, ownerId?: string): string | undefined {
+    spawnEffect(vfxId: string, position: Vector3, ownerId?: string, rotation?: number): string | undefined {
       const configs = store.tryFind(vfxId);
-      if (!configs || configs.length === 0) return undefined;
+      if (!configs || configs.length === 0) {
+        console.debug('[ParticleSystem] spawnEffect: VfxId not found:', vfxId);
+        return undefined;
+      }
 
       const id = `fx-phaser-${nextId++}`;
       const emitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
-      let burstCount = 0;
 
       for (const cfg of configs) {
         const texPath = cfg.Texture;
         const texKey = texPath ? textureMap.get(texPath) ?? "__WHITE" : "__WHITE";
-        const phaserCfg = emitterConfigToPhaser(cfg, texKey);
+        const texExists = scene.textures.exists(texKey);
+        console.debug('[ParticleSystem] spawnEffect vfx:', vfxId, 'texPath:', texPath, 'texKey:', texKey, 'exists:', texExists);
+        const phaserCfg = emitterConfigToPhaser(cfg, texKey, rotation);
 
-        // Create emitter at the effect position
         const emitter = scene.add.particles(position.X, position.Z, texKey, phaserCfg);
         emitter.setDepth(250);
 
@@ -135,8 +145,10 @@ export function createParticleSystem(
           emitter.addEmitZone(emitZone);
         }
 
-        // Handle Burst via explode after creation
-        burstCount += cfg.Burst;
+        // Fire burst particles (emitter is already at the correct world position)
+        if (cfg.Burst > 0) {
+          emitter.explode(cfg.Burst);
+        }
 
         // Start continuous emission if Rate > 0
         if (cfg.Rate > 0) {
@@ -144,13 +156,6 @@ export function createParticleSystem(
         }
 
         emitters.push(emitter);
-      }
-
-      // Fire burst particles after all emitters are set up
-      if (burstCount > 0) {
-        for (const emitter of emitters) {
-          emitter.explode(Math.ceil(burstCount / emitters.length), position.X, position.Z);
-        }
       }
 
       // Owner following for Local simulation space
