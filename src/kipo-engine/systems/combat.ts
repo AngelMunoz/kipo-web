@@ -1,6 +1,6 @@
 import type { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
-import { brandEntityId, type EntityId, type SkillId } from '../types/branded';
+import { brandEntityId, brandSkillId, type EntityId, type SkillId } from '../types/branded';
 import type { GameSystem, PomoEnvironment } from './environment';
 import type { WorldPosition, Vector2 } from '../domain/core';
 import type { SkillTarget, GameEvent, EffectApplicationIntent, AbilityIntent } from '../domain/events';
@@ -475,6 +475,72 @@ function handleInstantDelivery(
   activeSkill: ActiveSkill,
   searchCtx: SearchContext
 ) {
+  let targetCenter: Vector2 | undefined;
+
+  switch (target.kind) {
+    case 'TargetEntity': {
+      const tp = env.core.worldView.Positions.get(target.entity);
+      if (tp) targetCenter = toVector2(tp);
+      break;
+    }
+    case 'TargetPosition':
+      targetCenter = target.position;
+      break;
+    case 'TargetDirection':
+    case 'TargetSelf': {
+      const cp = env.core.worldView.Positions.get(casterId);
+      if (cp) targetCenter = toVector2(cp);
+      break;
+    }
+  }
+
+  if (!targetCenter) return;
+
+  // Spawn ImpactVisuals (F#: lines 606-661)
+  if (activeSkill.ImpactVisuals.VfxId) {
+    const casterPos = getPosition(env.core.worldView, casterId);
+
+    let direction: Vector2;
+    switch (target.kind) {
+      case 'TargetDirection':
+      case 'TargetPosition': {
+        const dx = target.position.X - casterPos.X;
+        const dy = target.position.Y - casterPos.Y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        direction = len > 0 ? { X: dx / len, Y: dy / len } : { X: 1, Y: 0 };
+        break;
+      }
+      case 'TargetEntity': {
+        const tp = env.core.worldView.Positions.get(target.entity);
+        if (tp) {
+          const dx = tp.X - casterPos.X;
+          const dz = tp.Z - casterPos.Y;
+          const len = Math.sqrt(dx * dx + dz * dz);
+          direction = len > 0 ? { X: dx / len, Y: dz / len } : { X: 1, Y: 0 };
+        } else {
+          direction = { X: 1, Y: 0 };
+        }
+        break;
+      }
+      default:
+        direction = { X: 0, Y: 1 };
+    }
+
+    env.core.eventBus.publish({
+      kind: 'Lifecycle',
+      lifecycle: {
+        kind: 'InstantSkillImpact',
+        impact: {
+          CasterId: casterId,
+          SkillId: brandSkillId(activeSkill.Id),
+          VfxId: activeSkill.ImpactVisuals.VfxId,
+          Position: targetCenter,
+          Direction: direction,
+        },
+      },
+    });
+  }
+
   const targets = resolveTargetsForInstant(env, casterId, target, activeSkill, searchCtx);
 
   for (const targetId of targets) {

@@ -61,6 +61,19 @@ function handleMovementTarget(env: PomoEnvironment, entityId: EntityId, target: 
         },
       },
     });
+  } else {
+    env.core.stateWrite.UpdateMovementState(entityId, { kind: 'Idle' });
+    env.core.eventBus.publish({
+      kind: 'State',
+      state: {
+        kind: 'Physics',
+        event: {
+          kind: 'MovementStateChanged',
+          entityId,
+          state: { kind: 'Idle' },
+        },
+      },
+    });
   }
 }
 

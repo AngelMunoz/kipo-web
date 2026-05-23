@@ -108,20 +108,18 @@ export async function bootstrapGame(): Promise<GameBootstrap> {
         { createCombatSystem },
         { createEntitySpawnerSystem },
         { createEffectApplicationSystem },
+        { createInventorySystem },
     ] = await Promise.all([
         import('../kipo-engine/systems/combat'),
         import('../kipo-engine/systems/entity-spawner'),
         import('../kipo-engine/systems/effect-application'),
+        import('../kipo-engine/systems/inventory'),
     ]);
 
     const combat = createCombatSystem(env);
     const entitySpawner = createEntitySpawnerSystem(env);
     const effectApp = createEffectApplicationSystem(env);
-
-    const inventorySystem = {
-        update: () => {},
-        dispose: () => {}
-    };
+    const inventorySystem = createInventorySystem(env);
 
     const equipmentSystem = {
         update: () => {},

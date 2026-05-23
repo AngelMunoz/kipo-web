@@ -141,6 +141,14 @@ export interface ChargeCompleted {
   Target: SkillTarget;
 }
 
+export interface InstantSkillImpact {
+  CasterId: EntityId;
+  SkillId: SkillId;
+  VfxId: string;
+  Position: Vector2;
+  Direction: Vector2;
+}
+
 export interface PickUpItemIntent {
   Picker: EntityId;
   Item: ItemInstance;
@@ -236,7 +244,8 @@ export type NotificationEvent =
 export type LifecycleEvent =
   | { kind: 'EntityDied'; died: EntityDied }
   | { kind: 'ProjectileImpacted'; impact: ProjectileImpacted }
-  | { kind: 'ChargeCompleted'; charge: ChargeCompleted };
+  | { kind: 'ChargeCompleted'; charge: ChargeCompleted }
+  | { kind: 'InstantSkillImpact'; impact: InstantSkillImpact };
 
 // --- Spawning Events ---
 

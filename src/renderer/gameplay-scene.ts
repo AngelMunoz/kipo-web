@@ -312,7 +312,6 @@ export class GameplayScene extends Phaser.Scene {
       if (e.kind !== "Lifecycle" || e.lifecycle.kind !== "ProjectileImpacted") return;
       const impact = e.lifecycle.impact;
 
-      // Look up impact VFX from skill data
       let vfxId: string | undefined;
       if (this.skillStore) {
         const skill = this.skillStore.getActive(impact.SkillId);
@@ -326,6 +325,18 @@ export class GameplayScene extends Phaser.Scene {
           Z: impact.ImpactPosition.Y,
         });
       }
+    });
+
+    // InstantSkillImpact → spawn impact particles for instant-delivery skills
+    events$.subscribe((e) => {
+      if (e.kind !== "Lifecycle" || e.lifecycle.kind !== "InstantSkillImpact") return;
+      const { VfxId, Position: pos } = e.lifecycle.impact;
+
+      this.particleSystem!.spawnEffect(VfxId, {
+        X: pos.X,
+        Y: 0,
+        Z: pos.Y,
+      });
     });
   }
 

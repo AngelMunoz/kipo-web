@@ -78,6 +78,7 @@ function updateMovementTargets(env: PomoEnvironment) {
             publishMovementStateChanged(env, entityId, { kind: 'Idle' });
           } else {
             env.core.stateWrite.UpdateMovementState(entityId, { kind: 'MovingAlongPath', path: remaining });
+            publishMovementStateChanged(env, entityId, { kind: 'MovingAlongPath', path: remaining });
           }
         } else {
           const dir = vector2Normalize({ X: target.X - pos.X, Y: target.Y - pos.Y });

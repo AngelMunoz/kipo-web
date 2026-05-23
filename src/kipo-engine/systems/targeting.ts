@@ -82,8 +82,23 @@ export function createTargetingSystem(env: PomoEnvironment): TargetingSystem {
         log("  no slotProcessing for", Slot);
         return;
       }
+
+      if (slotProcessing.kind === "Item") {
+        log("  slotProcessing is Item:", slotProcessing.itemInstanceId);
+        eventBus.publish({
+          kind: "ItemIntent",
+          itemIntent: {
+            kind: "Use",
+            useItem: {
+              EntityId: CasterId,
+              ItemInstanceId: slotProcessing.itemInstanceId,
+            },
+          },
+        });
+        return;
+      }
+
       if (slotProcessing.kind !== "Skill") {
-        log("  slotProcessing is not Skill:", slotProcessing.kind);
         return;
       }
       log("  slotProcessing skillId:", slotProcessing.skillId);
