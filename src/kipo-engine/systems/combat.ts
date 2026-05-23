@@ -526,6 +526,7 @@ function handleInstantDelivery(
         direction = { X: 0, Y: 1 };
     }
 
+    console.debug('[Combat] InstantSkillImpact VFX:', activeSkill.ImpactVisuals.VfxId, 'pos:', targetCenter, 'dir:', direction);
     env.core.eventBus.publish({
       kind: 'Lifecycle',
       lifecycle: {

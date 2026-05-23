@@ -180,14 +180,16 @@ export function createTargetingSystem(env: PomoEnvironment): TargetingSystem {
         skillTarget = { kind: "TargetEntity", entity: Selection.entity };
         const tp = worldView.Positions.get(Selection.entity);
         if (tp) targetPos = { X: tp.X, Y: tp.Z };
-      } else if (
-        skill.Targeting === "TargetPosition" ||
-        skill.Targeting === "TargetDirection"
-      ) {
+      } else if (skill.Targeting === "TargetDirection") {
         if (Selection.kind !== "SelectedPosition") {
-          log(
-            "  INVALID: Expected SelectedPosition for TargetPosition/Dir skill",
-          );
+          log("  INVALID: Expected SelectedPosition for TargetDirection skill");
+          return;
+        }
+        skillTarget = { kind: "TargetDirection", position: Selection.position };
+        targetPos = Selection.position;
+      } else if (skill.Targeting === "TargetPosition") {
+        if (Selection.kind !== "SelectedPosition") {
+          log("  INVALID: Expected SelectedPosition for TargetPosition skill");
           return;
         }
         skillTarget = { kind: "TargetPosition", position: Selection.position };
@@ -202,7 +204,24 @@ export function createTargetingSystem(env: PomoEnvironment): TargetingSystem {
         return;
       }
 
-      // Range check
+      // TargetDirection: fire immediately (F# handleTargetDirection, line 148-175)
+      if (skill.Targeting === "TargetDirection") {
+        log("  TargetDirection -> publishing Ability immediately");
+        eventBus.publish({
+          kind: "Intent",
+          intent: {
+            kind: "Ability",
+            ability: {
+              Caster: Selector,
+              SkillId: skillId,
+              Target: skillTarget,
+            },
+          },
+        });
+        return;
+      }
+
+      // Range check (TargetEntity + TargetPosition only, like F#)
       const dx = targetPos.X - casterPos.X;
       const dy = targetPos.Y - casterPos.Z;
       const distance = Math.sqrt(dx * dx + dy * dy);

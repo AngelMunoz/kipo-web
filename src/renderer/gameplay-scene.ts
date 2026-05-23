@@ -331,7 +331,7 @@ export class GameplayScene extends Phaser.Scene {
     events$.subscribe((e) => {
       if (e.kind !== "Lifecycle" || e.lifecycle.kind !== "InstantSkillImpact") return;
       const { VfxId, Position: pos } = e.lifecycle.impact;
-
+      console.debug('[RendererVFX] InstantSkillImpact:', VfxId, 'at', pos.X, pos.Y);
       this.particleSystem!.spawnEffect(VfxId, {
         X: pos.X,
         Y: 0,
