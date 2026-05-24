@@ -20,7 +20,8 @@ function handleDamageDealt(
   if (!currentResources) return;
 
   const newHP = Math.max(0, currentResources.HP - event.Amount);
-  const newResources: Resource = { ...currentResources, HP: newHP };
+  const newStatus: Resource['Status'] = newHP <= 0 ? 'Dead' : currentResources.Status;
+  const newResources: Resource = { ...currentResources, HP: newHP, Status: newStatus };
 
   env.core.stateWrite.UpdateResources(event.Target, newResources);
   env.core.stateWrite.UpdateInCombatTimer(event.Target);

@@ -65,7 +65,8 @@ function gatherVisualCues(
   controllerVelocity: Vector2,
   controllerFactions: Set<Faction>,
   positions: Map<EntityId, import('../domain/core').WorldPosition>,
-  factions: Map<EntityId, Set<Faction>>
+  factions: Map<EntityId, Set<Faction>>,
+  resources: ReadonlyMap<EntityId, import('../domain/entity').Resource>
 ): PerceptionCue[] {
   const cues: PerceptionCue[] = [];
 
@@ -73,6 +74,10 @@ function gatherVisualCues(
     const pos = { X: worldPos.X, Y: worldPos.Z }; // XZ is ground plane
     const targetFactions = factions.get(entityId);
     if (!targetFactions) continue;
+
+    // Skip dead or non-existent entities
+    const targetResources = resources.get(entityId);
+    if (!targetResources || targetResources.Status !== 'Alive') continue;
 
     if (!isHostileFaction(controllerFactions, targetFactions)) continue;
 
@@ -103,11 +108,16 @@ function decayMemories(
   controller: AIController,
   archetype: AIArchetype,
   currentPos: Vector2,
-  currentTick: number
+  currentTick: number,
+  resources: ReadonlyMap<EntityId, import('../domain/entity').Resource>
 ): Map<EntityId, MemoryEntry> {
   const result = new Map<EntityId, MemoryEntry>();
 
   for (const [entityId, entry] of controller.memories) {
+    // Purge memories of dead or removed entities
+    const targetResources = resources.get(entityId);
+    if (!targetResources || targetResources.Status !== 'Alive') continue;
+
     const age = currentTick - entry.lastSeenTick;
     const distToSpawn = vector2Distance(currentPos, controller.spawnPosition);
 
@@ -138,12 +148,13 @@ function gatherCues(
   currentTick: number,
   controllerFactions: Set<Faction>,
   positions: Map<EntityId, import('../domain/core').WorldPosition>,
-  factions: Map<EntityId, Set<Faction>>
+  factions: Map<EntityId, Set<Faction>>,
+  resources: ReadonlyMap<EntityId, import('../domain/entity').Resource>
 ): { cues: PerceptionCue[]; memories: Map<EntityId, MemoryEntry> } {
-  const visualCues = gatherVisualCues(controller, archetype, currentPos, currentVelocity, controllerFactions, positions, factions);
+  const visualCues = gatherVisualCues(controller, archetype, currentPos, currentVelocity, controllerFactions, positions, factions, resources);
   const timestampedVisualCues = visualCues.map((c) => ({ ...c, timestamp: currentTick }));
 
-  let updatedMemories = decayMemories(controller, archetype, currentPos, currentTick);
+  let updatedMemories = decayMemories(controller, archetype, currentPos, currentTick, resources);
 
   for (const cue of timestampedVisualCues) {
     if (cue.sourceEntityId) {
@@ -468,7 +479,8 @@ function processAndGenerateCommands(
   positions: Map<EntityId, import('../domain/core').WorldPosition>,
   factions: Map<EntityId, Set<Faction>>,
   skillStore: import('../stores/content-store').SkillStore,
-  cooldowns: Map<SkillId, number> | undefined
+  cooldowns: Map<SkillId, number> | undefined,
+  resources: ReadonlyMap<EntityId, import('../domain/entity').Resource>
 ): { controller: AIController; command: SetMovementTarget | undefined; ability: AbilityIntent | undefined } {
   const timeSinceLastDecision = currentTick - controller.lastDecisionTime;
 
@@ -484,7 +496,8 @@ function processAndGenerateCommands(
     currentTick,
     controllerFactions,
     positions,
-    factions
+    factions,
+    resources
   );
 
   const bestCue = selectBestCue(cues, archetype.cuePriorities);
@@ -908,6 +921,25 @@ export function createAISystem(env: PomoEnvironment): AISystem {
     baseStats: { Power: 1, Magic: 1, Sense: 1, Charm: 1 },
   };
 
+  function isInActiveZone(entityPos: { X: number; Y: number }): boolean {
+    const cameras = env.gameplay.cameraService.getAllCameras();
+    if (cameras.length === 0) return true; // No cameras = process all
+
+    for (const cam of cameras) {
+      const halfW = (cam.viewport.width / 2) * Constants.AI.ActiveZoneMargin;
+      const halfH = (cam.viewport.height / 2) * Constants.AI.ActiveZoneMargin;
+      const left = cam.position.X - halfW;
+      const right = cam.position.X + halfW;
+      const top = cam.position.Y - halfH;
+      const bottom = cam.position.Y + halfH;
+
+      if (entityPos.X >= left && entityPos.X <= right && entityPos.Y >= top && entityPos.Y <= bottom) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   return {
     update() {
       const world = env.core.world;
@@ -924,6 +956,10 @@ export function createAISystem(env: PomoEnvironment): AISystem {
         if (!pos) continue;
 
         const controllerPos = { X: pos.X, Y: pos.Z };
+
+        // F#: Skip AI processing if entity is outside active camera zone
+        if (!isInActiveZone(controllerPos)) continue;
+
         const vel = world.Velocities.get(controller.controlledEntityId);
         const controllerVelocity = vel ? { X: vel.X, Y: vel.Z } : { X: 0, Y: 0 };
 
@@ -947,7 +983,8 @@ export function createAISystem(env: PomoEnvironment): AISystem {
           positions,
           factions,
           env.stores.skillStore,
-          entityCooldowns
+          entityCooldowns,
+          world.Resources
         );
 
         if (updatedController !== controller) {

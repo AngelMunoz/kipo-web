@@ -282,7 +282,11 @@ function resolveTargetsForInstant(
     case 'Point': {
       switch (target.kind) {
         case 'TargetSelf': return [casterId];
-        case 'TargetEntity': return [target.entity];
+        case 'TargetEntity': {
+          const targetResources = env.core.worldView.Resources.get(target.entity);
+          if (!targetResources || targetResources.Status !== 'Alive') return [];
+          return [target.entity];
+        }
         default: return [];
       }
     }

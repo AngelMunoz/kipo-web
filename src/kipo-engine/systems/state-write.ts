@@ -460,6 +460,7 @@ function applyAdaptive(world: MutableWorld, time: number, cmd: AdaptiveCommand) 
       world.ActionSets.delete(cmd.entityId);
       world.ActiveActionSets.delete(cmd.entityId);
       world.BaseStats.delete(cmd.entityId);
+      world.CombatStatuses.delete(cmd.entityId);
       world.ActiveEffects.delete(cmd.entityId);
       world.AbilityCooldowns.delete(cmd.entityId);
       world.InCombatUntil.delete(cmd.entityId);
