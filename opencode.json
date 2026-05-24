@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": true,
+  "mcp": {
+    "playwright": {
+      "enabled": true,
+      "type": "local",
+      "command": ["pnpx", "@playwright/mcp@latest"]
+    }
+  }
+}
