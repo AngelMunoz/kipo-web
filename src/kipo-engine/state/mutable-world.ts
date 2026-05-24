@@ -47,7 +47,7 @@ export function createMutableWorld(): MutableWorld {
 
 export function createWorldView(mutable: MutableWorld): World {
   return {
-    Time: mutable.Time,
+    get Time() { return Object.freeze({ ...mutable.Time }); },
     EntityExists: mutable.EntityExists,
     Positions: mutable.Positions,
     Velocities: mutable.Velocities,

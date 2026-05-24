@@ -780,7 +780,6 @@ export function createCombatSystem(env: PomoEnvironment): GameSystem {
       )
       .subscribe((e) => {
         if (e.kind === 'Intent' && e.intent.kind === 'Ability') {
-          console.debug('[Combat] Ability intent received:', e.intent.ability.SkillId, 'caster:', e.intent.ability.Caster, 'target:', e.intent.ability.Target);
           handleAbilityIntent(env, e.intent.ability);
         }
       })

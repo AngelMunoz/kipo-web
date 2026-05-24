@@ -227,7 +227,88 @@ describe('Combat System', () => {
     const casterResources = world.Resources.get(casterId);
     expect(casterResources?.MP).toBe(90); // 100 - 10 cost
 
+    // Verify cooldown was applied
+    const casterCooldowns = world.AbilityCooldowns.get(casterId);
+    expect(casterCooldowns).toBeDefined();
+    expect(casterCooldowns?.get(brandSkillId(1))).toBe(1.5); // readyTime = 0 + 1.5
+
     // Cleanup
+    combat.dispose?.();
+    abilityActivation.dispose?.();
+  });
+
+  it('should update cooldown readyTime correctly when ability is used at non-zero time', () => {
+    const world = createMutableWorld();
+    const scenarioId = brandScenarioId('test-scenario');
+    const casterId = brandEntityId('caster-1');
+    const targetId = brandEntityId('target-1');
+
+    spawnEntity(
+      world,
+      casterId,
+      scenarioId,
+      { Power: 10, Magic: 10, Sense: 0, Charm: 10 },
+      { X: 0, Y: 0, Z: 0 },
+      { HP: 100, MP: 100, Status: 'Alive' }
+    );
+
+    spawnEntity(
+      world,
+      targetId,
+      scenarioId,
+      { Power: 5, Magic: 5, Sense: 5, Charm: 5 },
+      { X: 10, Y: 0, Z: 0 },
+      { HP: 100, MP: 100, Status: 'Alive' }
+    );
+
+    const meleeSkill: ActiveSkill = {
+      Id: 1,
+      Name: 'Melee Attack',
+      Description: 'Test melee',
+      Intent: 'Offensive',
+      DamageSource: 'Physical',
+      Cost: { ResourceType: 'MP', Amount: 10 },
+      Cooldown: 1.5,
+      CastingTime: undefined,
+      Targeting: 'TargetEntity',
+      Range: 16,
+      Area: { kind: 'Point' },
+      Delivery: { kind: 'Instant' },
+      Origin: { kind: 'Caster' },
+      CastVisuals: { ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined },
+      ImpactVisuals: { ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined },
+      Effects: [],
+      Formula: { kind: 'Const', value: 20 },
+      ChargePhase: undefined,
+      ElementFormula: undefined,
+    };
+
+    const env = createMinimalEnv(world, createFakeStores(meleeSkill), 0);
+    const abilityActivation = createAbilityActivationSystem(env);
+    const combat = createCombatSystem(env);
+
+    // Set time to 3.0
+    world.Time = { Delta: 0.016, TotalGameTime: 3.0, Previous: 0 };
+
+    env.core.eventBus.publish({
+      kind: 'Intent',
+      intent: {
+        kind: 'Ability',
+        ability: {
+          Caster: casterId,
+          SkillId: brandSkillId(1),
+          Target: { kind: 'TargetEntity', entity: targetId },
+        },
+      },
+    });
+
+    env.core.eventBus.flush();
+    env.core.stateWrite.FlushWrites(world, 3.0);
+
+    const casterCooldowns = world.AbilityCooldowns.get(casterId);
+    expect(casterCooldowns).toBeDefined();
+    expect(casterCooldowns?.get(brandSkillId(1))).toBe(4.5); // readyTime = 3.0 + 1.5
+
     combat.dispose?.();
     abilityActivation.dispose?.();
   });
