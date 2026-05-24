@@ -37,7 +37,7 @@ function createNewActiveEffect(
   };
 }
 
-function findExistingEffect(effects: ActiveEffect[] | undefined, effectName: string): ActiveEffect | undefined {
+function findExistingEffect(effects: readonly ActiveEffect[] | undefined, effectName: string): ActiveEffect | undefined {
   if (!effects) return undefined;
   return effects.find((e) => e.SourceEffect.Name === effectName);
 }

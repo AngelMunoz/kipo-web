@@ -10,7 +10,7 @@ import {
 import type { BaseStats } from '../domain/entity';
 import type { ActiveEffect, Effect, StatModifier } from '../domain/skill';
 import type { ItemDefinition, ItemInstance, Slot } from '../domain/item';
-import type { World } from '../domain/world';
+import type { MutableWorld } from '../domain/world';
 
 // --- Fake ItemStore ---
 
@@ -75,12 +75,12 @@ function createActiveEffect(sourceEntity: EntityId, targetEntity: EntityId, effe
   };
 }
 
-function spawnEntity(world: World, entityId: EntityId, baseStats: BaseStats) {
+function spawnEntity(world: MutableWorld, entityId: EntityId, baseStats: BaseStats) {
   world.EntityExists.add(entityId);
   world.BaseStats.set(entityId, baseStats);
 }
 
-function equipItem(world: World, entityId: EntityId, slot: Slot, itemId: ItemId, instanceId: ItemInstanceId) {
+function equipItem(world: MutableWorld, entityId: EntityId, slot: Slot, itemId: ItemId, instanceId: ItemInstanceId) {
   const instance: ItemInstance = {
     InstanceId: instanceId,
     ItemId: itemId,
@@ -96,7 +96,7 @@ function equipItem(world: World, entityId: EntityId, slot: Slot, itemId: ItemId,
   }
 }
 
-function applyEffectToEntity(world: World, entityId: EntityId, effect: ActiveEffect) {
+function applyEffectToEntity(world: MutableWorld, entityId: EntityId, effect: ActiveEffect) {
   const existing = world.ActiveEffects.get(entityId);
   if (existing) {
     existing.push(effect);

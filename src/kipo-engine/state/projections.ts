@@ -89,7 +89,7 @@ function applySingleModifier(stats: DerivedStats, modifier: StatModifier): Deriv
 
 export function applyModifiers(
   stats: DerivedStats,
-  effects: ActiveEffect[] | undefined,
+  effects: readonly ActiveEffect[] | undefined,
   equipmentBonuses: StatModifier[]
 ): DerivedStats {
   let result = stats;
