@@ -11,7 +11,13 @@ import { createParticleSystem, type ParticleSystem } from "./systems/renderer-pa
 import type { ParticleStore } from "./stores/particle-store";
 import { PLAYER_ENTITY_ID, PLAYER_SCENARIO_ID } from "./renderer-constants";
 import { USE_SLOT_ACTIONS, SET_ACTION_SET_ACTIONS } from "../kipo-engine/domain/events";
-import { brandEntityId, brandAiArchetypeId } from "../kipo-engine/types/branded";
+import { brandEntityId } from "../kipo-engine/types/branded";
+import {
+  extractSpawnSetup,
+  publishRegisterSpawnZones,
+  spawnEnemiesForScenario,
+  spawnPlayer,
+} from "./spawn-setup";
 
 export class GameplayScene extends Phaser.Scene {
   private world: MutableWorld | null = null;
@@ -37,6 +43,8 @@ export class GameplayScene extends Phaser.Scene {
   // Track spawned effect VFX: key = `${targetEntity}-${effectName}`, value = vfxId
   private effectVfxMap = new Map<string, string>();
 
+  private env: PomoEnvironment | null = null;
+
   init(data: {
     world: MutableWorld;
     eventBus: PomoEnvironment["core"]["eventBus"];
@@ -44,6 +52,7 @@ export class GameplayScene extends Phaser.Scene {
     gameplayLoop: GameplayLoop;
     particleStore: ParticleStore;
     skillStore: PomoEnvironment["stores"]["skillStore"];
+    env: PomoEnvironment;
   }) {
     this.world = data.world;
     this.eventBus = data.eventBus;
@@ -51,6 +60,7 @@ export class GameplayScene extends Phaser.Scene {
     this.gameplayLoop = data.gameplayLoop;
     this.particleStore = data.particleStore;
     this.skillStore = data.skillStore;
+    this.env = data.env;
   }
 
   preload() {
@@ -126,11 +136,8 @@ export class GameplayScene extends Phaser.Scene {
     // Setup animations
     this.setupAnimations();
 
-    // Spawn player
-    this.spawnPlayerEntity();
-
-    // Spawn some dummy targets for testing
-    this.spawnTestTargets();
+    // Setup spawns: player + enemy zones (mirrors F# GameplayScene.create)
+    this.setupSpawns();
   }
 
   update(_time: number, delta: number) {
@@ -238,57 +245,19 @@ export class GameplayScene extends Phaser.Scene {
     graphics.setDepth(-1);
   }
 
-  private spawnTestTargets() {
-    if (!this.eventBus) return;
+  private setupSpawns() {
+    if (!this.env || !this.eventBus) return;
 
-    // Spawn 3 static orcs as targets
-    const positions = [
-      { X: 600, Z: 200 },
-      { X: 700, Z: 400 },
-      { X: 200, Z: 500 },
-    ];
+    const { playerSpawnPosition, spawnZones } = extractSpawnSetup(this.env);
 
-    for (let i = 0; i < positions.length; i++) {
-      const pos = positions[i];
-      this.eventBus.publish({
-        kind: "Spawn",
-        spawning: {
-          kind: "SpawnEntity",
-          spawn: {
-            EntityId: brandEntityId(`target-${i}`),
-            ScenarioId: PLAYER_SCENARIO_ID,
-            Type: {
-              kind: "Faction",
-              info: {
-                ArchetypeId: brandAiArchetypeId(1),
-                EntityDefinitionKey: undefined,
-                MapOverride: undefined,
-                Faction: "Enemy",
-                SpawnZoneName: undefined,
-              },
-            },
-            Position: { X: pos.X, Y: 0, Z: pos.Z },
-          },
-        },
-      });
+    // Spawn player at map spawn point
+    spawnPlayer(this.env, PLAYER_ENTITY_ID, PLAYER_SCENARIO_ID, playerSpawnPosition);
+
+    // Register zones and spawn initial enemies
+    if (spawnZones.length > 0) {
+      publishRegisterSpawnZones(this.env, PLAYER_SCENARIO_ID, spawnZones);
+      spawnEnemiesForScenario(this.env, PLAYER_SCENARIO_ID, spawnZones);
     }
-  }
-
-  private spawnPlayerEntity() {
-    if (!this.eventBus) return;
-
-    this.eventBus.publish({
-      kind: "Spawn",
-      spawning: {
-        kind: "SpawnEntity",
-        spawn: {
-          EntityId: PLAYER_ENTITY_ID,
-          ScenarioId: PLAYER_SCENARIO_ID,
-          Type: { kind: "Player", playerIndex: 0 },
-          Position: { X: 400, Y: 0, Z: 300 },
-        },
-      },
-    });
   }
 
   getWorld() { return this.world; }
@@ -420,6 +389,7 @@ export function createGameplayScene(
     gameplayLoop,
     particleStore,
     skillStore: env.stores.skillStore,
+    env,
   });
 
   return game;

@@ -11,6 +11,7 @@ import type {
   AIEntityStore,
   AIFamilyStore,
   DecisionTreeStore,
+  MapEntityGroupStore,
 } from '../stores/content-store';
 import type { MovementSnapshot } from '../state/projections';
 
@@ -29,6 +30,7 @@ export interface StoreServices {
   aiEntityStore: AIEntityStore;
   aiFamilyStore: AIFamilyStore;
   decisionTreeStore: DecisionTreeStore;
+  mapEntityGroupStore: MapEntityGroupStore;
 }
 
 export interface ProjectionService {

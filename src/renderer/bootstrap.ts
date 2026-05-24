@@ -81,7 +81,8 @@ export async function bootstrapGame(): Promise<GameBootstrap> {
         aiArchetypeStore: contentStores.AIArchetypeStore,
         aiEntityStore: contentStores.AIEntityStore,
         aiFamilyStore: contentStores.AIFamilyStore,
-        decisionTreeStore: contentStores.DecisionTreeStore
+        decisionTreeStore: contentStores.DecisionTreeStore,
+        mapEntityGroupStore: contentStores.MapEntityGroupStore
     };
 
     const gameplay: GameplayServices = {
@@ -121,6 +122,9 @@ export async function bootstrapGame(): Promise<GameBootstrap> {
     const effectApp = createEffectApplicationSystem(env);
     const inventorySystem = createInventorySystem(env);
 
+    const { createAISystem } = await import('../kipo-engine/systems/ai-system');
+    const aiSystem = createAISystem(env);
+
     const equipmentSystem = {
         update: () => {},
         dispose: () => {}
@@ -132,7 +136,7 @@ export async function bootstrapGame(): Promise<GameBootstrap> {
         effectApp,
         projectile,
         movement,
-        ai: entitySpawner,
+        ai: aiSystem,
         resourceManager,
         inventory: inventorySystem,
         equipment: equipmentSystem,

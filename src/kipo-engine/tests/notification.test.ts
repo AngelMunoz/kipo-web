@@ -35,6 +35,7 @@ function createMinimalEnv(
       aiEntityStore: { tryFind: () => undefined, all: () => [] },
       aiFamilyStore: { tryFind: () => undefined, all: () => [] },
       decisionTreeStore: { tryFind: () => undefined, all: () => [] },
+      mapEntityGroupStore: { tryFind: () => undefined, all: () => [] },
     },
     gameplay: {
       projections: {

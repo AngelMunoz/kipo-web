@@ -35,6 +35,11 @@ export interface DecisionTreeStore {
   all(): DecisionTree[];
 }
 
+export interface MapEntityGroupStore {
+  tryFind(groupName: string): import('../domain/ai').MapEntityGroup | undefined;
+  all(): import('../domain/ai').MapEntityGroup[];
+}
+
 export interface ContentStores {
   SkillStore: SkillStore;
   ItemStore: ItemStore;
@@ -42,6 +47,7 @@ export interface ContentStores {
   AIEntityStore: AIEntityStore;
   AIFamilyStore: AIFamilyStore;
   DecisionTreeStore: DecisionTreeStore;
+  MapEntityGroupStore: MapEntityGroupStore;
 }
 
 export async function loadContent(basePath: string): Promise<ContentStores> {
@@ -52,6 +58,7 @@ export async function loadContent(basePath: string): Promise<ContentStores> {
     entitiesJson,
     familiesJson,
     treesJson,
+    mapGroupsJson,
   ] = await Promise.all([
     fetch(`${basePath}/Skills.json`).then((r) => r.json()),
     fetch(`${basePath}/Items.json`).then((r) => r.json()),
@@ -59,6 +66,7 @@ export async function loadContent(basePath: string): Promise<ContentStores> {
     fetch(`${basePath}/AIEntities.json`).then((r) => r.json()),
     fetch(`${basePath}/AIFamilies.json`).then((r) => r.json()),
     fetch(`${basePath}/DecisionTrees.json`).then((r) => r.json()),
+    fetch(`${basePath}/MapEntityGroups.json`).then((r) => r.json()),
   ]);
 
   const {
@@ -68,6 +76,7 @@ export async function loadContent(basePath: string): Promise<ContentStores> {
     AIEntityMapSchema,
     AIFamilyMapSchema,
     DecisionTreeMapSchema,
+    MapEntityGroupMapSchema,
   } = await import('./serialization');
 
   const skillsParsed = SkillMapSchema.parse(skillsJson);
@@ -76,6 +85,7 @@ export async function loadContent(basePath: string): Promise<ContentStores> {
   const entitiesParsed = AIEntityMapSchema.parse(entitiesJson);
   const familiesParsed = AIFamilyMapSchema.parse(familiesJson);
   const treesParsed = DecisionTreeMapSchema.parse(treesJson);
+  const mapGroupsParsed = MapEntityGroupMapSchema.parse(mapGroupsJson);
 
   // Fix up keys
   for (const [key, def] of Object.entries(entitiesParsed)) {
@@ -113,6 +123,11 @@ export async function loadContent(basePath: string): Promise<ContentStores> {
   const treesMap = new Map<string, DecisionTree>();
   for (const [name, tree] of Object.entries(treesParsed)) {
     treesMap.set(name, tree);
+  }
+
+  const mapGroupsMap = new Map<string, import('../domain/ai').MapEntityGroup>();
+  for (const [name, group] of Object.entries(mapGroupsParsed)) {
+    mapGroupsMap.set(name, group);
   }
 
   return {
@@ -166,6 +181,14 @@ export async function loadContent(basePath: string): Promise<ContentStores> {
       },
       all(): DecisionTree[] {
         return Array.from(treesMap.values());
+      },
+    },
+    MapEntityGroupStore: {
+      tryFind(groupName: string): import('../domain/ai').MapEntityGroup | undefined {
+        return mapGroupsMap.get(groupName);
+      },
+      all(): import('../domain/ai').MapEntityGroup[] {
+        return Array.from(mapGroupsMap.values());
       },
     },
   };

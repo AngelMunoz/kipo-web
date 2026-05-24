@@ -86,6 +86,14 @@ function createFakeStores(skill: ActiveSkill): StoreServices {
         return [];
       },
     },
+    mapEntityGroupStore: {
+      tryFind() {
+        return undefined;
+      },
+      all() {
+        return [];
+      },
+    },
   };
 }
 

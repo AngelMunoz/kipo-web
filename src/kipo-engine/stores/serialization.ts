@@ -535,9 +535,30 @@ const AIEntityDefinitionSchema: z.ZodType<AIEntityDefinition> = z.object({
 
 // --- Export schemas ---
 
+const MapEntityGroupSchema = z.object({
+  Entities: z.array(z.string()),
+  Weights: z.array(z.number()).optional(),
+  Overrides: z.record(z.string(), z.object({
+    StatMultiplier: z.number().optional(),
+    SkillRestrictions: z.array(z.number().int()).optional(),
+    ExtraSkills: z.array(z.number().int()).optional(),
+  })).optional().default({}),
+  Faction: z.enum(['Player', 'NPC', 'Ally', 'Enemy', 'AIControlled', 'TeamRed', 'TeamBlue', 'TeamGreen', 'TeamYellow', 'TeamOrange', 'TeamPurple', 'TeamPink', 'TeamCyan', 'TeamWhite', 'TeamBlack']).optional(),
+}).transform((raw): import('../domain/ai').MapEntityGroup => ({
+  Entities: raw.Entities,
+  Weights: raw.Weights,
+  Overrides: new Map(Object.entries(raw.Overrides).map(([k, v]) => [k, {
+    StatMultiplier: v.StatMultiplier,
+    SkillRestrictions: v.SkillRestrictions?.map(brandSkillId),
+    ExtraSkills: v.ExtraSkills?.map(brandSkillId),
+  }])),
+  Faction: raw.Faction,
+}));
+
 export const SkillMapSchema = z.record(z.string(), SkillSchema);
 export const ItemMapSchema = z.record(z.string(), ItemDefinitionSchema);
 export const AIArchetypeArraySchema = z.array(AIArchetypeSchema);
 export const AIEntityMapSchema = z.record(z.string(), AIEntityDefinitionSchema);
 export const AIFamilyMapSchema = z.record(z.string(), AIFamilyConfigSchema);
 export const DecisionTreeMapSchema = z.record(z.string(), DecisionTreeSchema);
+export const MapEntityGroupMapSchema = z.record(z.string(), MapEntityGroupSchema);

@@ -43,6 +43,7 @@ function createFakeStores(skill: ActiveSkill): StoreServices {
     aiEntityStore: { tryFind() { return undefined; }, all() { return []; } },
     aiFamilyStore: { tryFind() { return undefined; }, all() { return []; } },
     decisionTreeStore: { tryFind() { return undefined; }, all() { return []; } },
+    mapEntityGroupStore: { tryFind() { return undefined; }, all() { return []; } },
   };
 }
 

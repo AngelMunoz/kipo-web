@@ -100,6 +100,14 @@ function createFakeStores(
         return [];
       },
     },
+    mapEntityGroupStore: {
+      tryFind() {
+        return undefined;
+      },
+      all() {
+        return [];
+      },
+    },
   };
 }
 
