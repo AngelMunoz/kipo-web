@@ -5,7 +5,12 @@
     "playwright": {
       "enabled": true,
       "type": "local",
-      "command": ["pnpx", "@playwright/mcp@latest"]
+      "command": [
+        "pnpx",
+        "@playwright/mcp@latest",
+        "--headless",
+        "--browser=msedge"
+      ]
     }
   }
 }
