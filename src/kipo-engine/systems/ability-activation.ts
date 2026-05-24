@@ -21,9 +21,9 @@ export type ValidationError =
 
 export interface ValidationContext {
   SkillStore: SkillStore;
-  Statuses: CombatStatus[];
+  Statuses: readonly CombatStatus[];
   Resources: { HP: number; MP: number } | undefined;
-  Cooldowns: Map<SkillId, number> | undefined;
+  Cooldowns: ReadonlyMap<SkillId, number> | undefined;
   GameTime: number;
   EntityId: EntityId;
 }
@@ -31,7 +31,7 @@ export interface ValidationContext {
 // --- Pure Validation Logic (1:1 from F#) ---
 
 function checkStatusEffects(
-  statuses: CombatStatus[],
+  statuses: readonly CombatStatus[],
   skill: ActiveSkill
 ): Result<void, ValidationError> {
   if (statuses.some((s) => s.kind === 'Stunned')) {
@@ -67,7 +67,7 @@ function checkResources(
 }
 
 function checkCooldown(
-  cooldowns: Map<SkillId, number> | undefined,
+  cooldowns: ReadonlyMap<SkillId, number> | undefined,
   gameTime: number,
   skillId: SkillId
 ): Result<void, ValidationError> {
@@ -195,6 +195,15 @@ function handlePendingCast(
   if (!targetPos) {
     env.core.stateWrite.ClearPendingSkillCast(entityId);
     return;
+  }
+
+  // Validate target entity is still alive (F#: targeting/activation validates before combat)
+  if (target.kind === 'TargetEntity') {
+    const targetResources = env.core.worldView.Resources.get(target.entity);
+    if (!targetResources || targetResources.Status !== 'Alive') {
+      env.core.stateWrite.ClearPendingSkillCast(entityId);
+      return;
+    }
   }
 
   const dx = casterPos.X - targetPos.X;

@@ -177,6 +177,11 @@ export function createTargetingSystem(env: PomoEnvironment): TargetingSystem {
           log("  INVALID: Expected SelectedEntity for TargetEntity skill");
           return;
         }
+        const targetResources = worldView.Resources.get(Selection.entity);
+        if (!targetResources || targetResources.Status !== 'Alive') {
+          log("  target entity not alive");
+          return;
+        }
         skillTarget = { kind: "TargetEntity", entity: Selection.entity };
         const tp = worldView.Positions.get(Selection.entity);
         if (tp) targetPos = { X: tp.X, Y: tp.Z };
