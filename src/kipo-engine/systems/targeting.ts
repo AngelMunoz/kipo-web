@@ -4,12 +4,41 @@ import type { PomoEnvironment } from "./environment";
 import type { GameEvent, SkillTarget } from "../domain/events";
 import type { ActiveSkill } from "../domain/skill";
 import type { EntityId, SkillId } from "../types/branded";
+import { validateAbility, type ValidationContext } from "./ability-activation";
 
 const SKILL_ACTIVATION_RANGE_BUFFER = 5.0;
 const DEBUG = true;
 
 function log(...args: unknown[]) {
   if (DEBUG) console.debug("[Targeting]", ...args);
+}
+
+function buildValidationContext(
+  env: PomoEnvironment,
+  entityId: EntityId,
+): ValidationContext {
+  return {
+    SkillStore: env.stores.skillStore,
+    Statuses: env.core.worldView.CombatStatuses.get(entityId) ?? [],
+    Resources: env.core.worldView.Resources.get(entityId),
+    Cooldowns: env.core.worldView.AbilityCooldowns.get(entityId),
+    GameTime: env.core.worldView.Time.TotalGameTime,
+    EntityId: entityId,
+  };
+}
+
+function canActivate(
+  env: PomoEnvironment,
+  entityId: EntityId,
+  skillId: SkillId,
+): boolean {
+  const ctx = buildValidationContext(env, entityId);
+  const result = validateAbility(ctx, skillId);
+  if (!result.ok) {
+    log("  Activation blocked:", result.error, "for skill", skillId);
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -112,6 +141,7 @@ export function createTargetingSystem(env: PomoEnvironment): TargetingSystem {
 
       // Only enter targeting for skills that need targeting
       if (skill.Targeting === "Self") {
+        if (!canActivate(env, CasterId, slotProcessing.skillId)) return;
         // Self-targeting: fire immediately without targeting mode
         log("  Self-targeting -> publishing Ability immediately");
         eventBus.publish({
@@ -206,6 +236,7 @@ export function createTargetingSystem(env: PomoEnvironment): TargetingSystem {
 
       // TargetDirection: fire immediately (F# handleTargetDirection, line 148-175)
       if (skill.Targeting === "TargetDirection") {
+        if (!canActivate(env, Selector, skillId)) return;
         log("  TargetDirection -> publishing Ability immediately");
         eventBus.publish({
           kind: "Intent",
@@ -256,6 +287,7 @@ export function createTargetingSystem(env: PomoEnvironment): TargetingSystem {
         stateWrite.SetPendingSkillCast(Selector, skillId, skillTarget);
       } else {
         // In range: cast immediately
+        if (!canActivate(env, Selector, skillId)) return;
         log("  IN RANGE -> publishing Ability intent");
         eventBus.publish({
           kind: "Intent",
