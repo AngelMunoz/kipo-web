@@ -11,7 +11,9 @@ import { createParticleSystem, type ParticleSystem } from "./systems/renderer-pa
 import type { ParticleStore } from "./stores/particle-store";
 import { PLAYER_ENTITY_ID, PLAYER_SCENARIO_ID } from "./renderer-constants";
 import { USE_SLOT_ACTIONS, SET_ACTION_SET_ACTIONS } from "../kipo-engine/domain/events";
-import { brandEntityId } from "../kipo-engine/types/branded";
+import { brandEntityId, type EntityId } from "../kipo-engine/types/branded";
+import { validateAbility, type ValidationContext } from "../kipo-engine/systems/ability-activation";
+import type { GameAction } from "../kipo-engine/domain/events";
 import {
   extractSpawnSetup,
   publishRegisterSpawnZones,
@@ -153,13 +155,7 @@ export class GameplayScene extends Phaser.Scene {
     const input = this.inputSystem;
     for (const action of USE_SLOT_ACTIONS) {
       if (input.justDown(action)) {
-        this.eventBus.publish({
-          kind: "Intent",
-          intent: {
-            kind: "SlotActivated",
-            slot: { Slot: action, CasterId: PLAYER_ENTITY_ID },
-          },
-        });
+        this.tryActivateSlot(action, PLAYER_ENTITY_ID);
       }
     }
 
@@ -270,6 +266,84 @@ export class GameplayScene extends Phaser.Scene {
   getProjectileSystem() { return this.projectileSystem; }
   getVFXSystem() { return this.vfxSystem; }
   getParticleSystem() { return this.particleSystem; }
+
+  /**
+   * Validates slot activation before publishing events.
+   * Mirrors F# AbilityActivationSystem.Update (lines 497-559).
+   * Self-targeting skills fire immediately if valid; others enter targeting mode.
+   */
+  private tryActivateSlot(action: GameAction, casterId: EntityId) {
+    if (!this.world || !this.eventBus || !this.env) return;
+
+    const actionSets = this.world.ActionSets.get(casterId);
+    if (!actionSets) return;
+
+    const activeSetIndex = this.world.ActiveActionSets.get(casterId) ?? 0;
+    const actionSet = actionSets.get(activeSetIndex);
+    if (!actionSet) return;
+
+    const slotProcessing = actionSet.get(action);
+    if (!slotProcessing || slotProcessing.kind !== "Skill") return;
+
+    const skill = this.skillStore?.getActive(slotProcessing.skillId);
+    if (!skill) return;
+
+    const ctx: ValidationContext = {
+      SkillStore: this.env.stores.skillStore,
+      Statuses: this.world.CombatStatuses.get(casterId) ?? [],
+      Resources: this.world.Resources.get(casterId),
+      Cooldowns: this.world.AbilityCooldowns.get(casterId),
+      GameTime: this.world.Time.TotalGameTime,
+      EntityId: casterId,
+    };
+
+    const result = validateAbility(ctx, slotProcessing.skillId);
+    if (!result.ok) {
+      const messages: Record<string, string> = {
+        NotEnoughResources: "Not enough resources!",
+        OnCooldown: "Ability on cooldown!",
+        SkillNotFound: "Skill not found!",
+        CannotActivatePassiveSkill: "Cannot activate passive skill!",
+        Stunned: "Stunned!",
+        Silenced: "Silenced!",
+      };
+      const pos = this.world.Positions.get(casterId);
+      this.eventBus.publish({
+        kind: "Notification",
+        notification: {
+          kind: "ShowMessage",
+          message: {
+            Message: messages[result.error] ?? "Cannot cast skill",
+            Position: pos ?? { X: 0, Y: 0, Z: 0 },
+            Type: "Crit",
+          },
+        },
+      });
+      return;
+    }
+
+    if (skill.Targeting === "Self") {
+      this.eventBus.publish({
+        kind: "Intent",
+        intent: {
+          kind: "Ability",
+          ability: {
+            Caster: casterId,
+            SkillId: slotProcessing.skillId,
+            Target: { kind: "TargetSelf" },
+          },
+        },
+      });
+    } else {
+      this.eventBus.publish({
+        kind: "Intent",
+        intent: {
+          kind: "SlotActivated",
+          slot: { Slot: action, CasterId: casterId },
+        },
+      });
+    }
+  }
 
   private subscribeToImpacts() {
     if (!this.eventBus || !this.particleSystem) return;
