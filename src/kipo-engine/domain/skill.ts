@@ -404,7 +404,14 @@ export interface ChargeConfig {
 
 export interface OrbitalConfig {
   Count: number;
+  Radius: number;
   CenterOffset: Vector3;
+  RotationAxis: Vector3;
+  PathScale: { X: number; Y: number };
+  StartSpeed: number;
+  EndSpeed: number;
+  Duration: number;
+  Visual: VisualManifest;
 }
 
 export type Delivery =

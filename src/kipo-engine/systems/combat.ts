@@ -3,12 +3,103 @@ import { filter } from 'rxjs/operators';
 import { brandEntityId, brandSkillId, type EntityId, type SkillId } from '../types/branded';
 import type { GameSystem, PomoEnvironment } from './environment';
 import type { WorldPosition, Vector2 } from '../domain/core';
-import type { SkillTarget, GameEvent, EffectApplicationIntent, AbilityIntent } from '../domain/events';
-import type { ActiveSkill } from '../domain/skill';
+import type { SkillTarget, GameEvent, EffectApplicationIntent, AbilityIntent, ChargeCompleted } from '../domain/events';
+import type { ActiveSkill, SkillArea } from '../domain/skill';
 import type { SearchContext } from '../domain/spatial';
 import { findTargetsInCircle, findTargetsInCone, findTargetsInLine } from '../domain/spatial';
 import { toVector2, fromVector2, WorldPositionZero } from '../domain/core';
 import { calculateFinalDamage, calculateRawDamageSelfTarget, calculateEffectDamage, calculateEffectRestoration } from './damage-calculator';
+import type { SeededPRNG } from '../utils/rng';
+import { calculateOrbitalPosition } from '../domain/orbital';
+
+// --- Orbital Helpers (ported from F# Combat.fs) ---
+
+function buildSearchContext(env: PomoEnvironment, entityId: EntityId): SearchContext | undefined {
+  const scenarioId = env.core.worldView.EntityScenario.get(entityId);
+  if (!scenarioId) return undefined;
+  
+  const snapshot = env.gameplay.projections.computeMovementSnapshot(scenarioId);
+  const liveEntities = new Set<EntityId>();
+  for (const [id, res] of env.core.worldView.Resources.entries()) {
+    if (res.Status === 'Alive') liveEntities.add(id);
+  }
+  
+  return {
+    GetNearbyEntities: (center, radius) =>
+      env.gameplay.projections.getNearbyEntitiesSnapshot(snapshot, liveEntities, center, radius),
+  };
+}
+
+function resolveBaseTargetPos(env: PomoEnvironment, completed: ChargeCompleted): Vector2 | undefined {
+  switch (completed.Target.kind) {
+    case 'TargetEntity': {
+      const pos = env.core.worldView.Positions.get(completed.Target.entity);
+      return pos ? toVector2(pos) : undefined;
+    }
+    case 'TargetPosition':
+    case 'TargetDirection':
+      return completed.Target.position;
+    case 'TargetSelf': {
+      const pos = env.core.worldView.Positions.get(completed.CasterId);
+      return pos ? toVector2(pos) : undefined;
+    }
+  }
+}
+
+function findTargetsForArea(
+  searchCtx: SearchContext,
+  casterId: EntityId,
+  area: SkillArea,
+  center: Vector2,
+  maxTargets: number
+): EntityId[] {
+  switch (area.kind) {
+    case 'Circle':
+      return findTargetsInCircle(searchCtx, {
+        CasterId: casterId,
+        Circle: { Center: center, Radius: area.radius },
+        MaxTargets: maxTargets,
+      });
+    case 'Cone':
+      // For cone, we need direction from caster to center
+      return []; // Simplified - would need direction calculation
+    case 'Line':
+      return []; // Simplified - would need line calculation
+    default:
+      return [];
+  }
+}
+
+function getRandomPositionInArea(
+  area: SkillArea,
+  target: SkillTarget,
+  rng: SeededPRNG
+): Vector2 {
+  let center: Vector2;
+  
+  switch (target.kind) {
+    case 'TargetPosition':
+    case 'TargetDirection':
+      center = target.position;
+      break;
+    case 'TargetEntity':
+    case 'TargetSelf':
+    default:
+      center = { X: 0, Y: 0 };
+  }
+  
+  if (area.kind === 'Circle' || area.kind === 'MultiPoint') {
+    const radius = area.kind === 'Circle' ? area.radius : area.radius;
+    const angle = rng.next() * Math.PI * 2;
+    const dist = rng.next() * radius;
+    return {
+      X: center.X + Math.cos(angle) * dist,
+      Y: center.Y + Math.sin(angle) * dist,
+    };
+  }
+  
+  return center;
+}
 
 // --- Context Helpers ---
 
@@ -497,6 +588,8 @@ function handleInstantDelivery(
   if (!targetCenter) return;
 
   // Spawn ImpactVisuals (F#: lines 606-661)
+  // Note: F# does complex yaw/pitch calculation for 3D rotation.
+  // In 2D port, we pass direction vector and let renderer handle rotation.
   if (activeSkill.ImpactVisuals.VfxId) {
     const casterPos = getPosition(env.core.worldView, casterId);
 
@@ -745,26 +838,110 @@ function handleChargeCompleted(env: PomoEnvironment, completed: import('../domai
     return;
   }
 
-  // Charged projectile delivery
-  // ... (simplified for now; full orbital logic omitted for brevity but can be added)
-  // Fallback to single projectile
-  const projectileId = brandEntityId(crypto.randomUUID());
-  const baseTarget: import('../domain/projectile').ProjectileTarget =
-    completed.Target.kind === 'TargetEntity'
-      ? { kind: 'EntityTarget', entity: completed.Target.entity }
-      : completed.Target.kind === 'TargetPosition'
-        ? { kind: 'PositionTarget', position: completed.Target.position }
-        : completed.Target.kind === 'TargetDirection'
-          ? { kind: 'PositionTarget', position: completed.Target.position }
-          : { kind: 'EntityTarget', entity: completed.CasterId };
+  // Charged projectile delivery with orbital support
+  // Ported from F# Combat.fs:941-1080 (handleChargeCompleted)
+  const orbitalConfig = skill.ChargePhase.Orbitals;
+  const activeOrbital = env.core.worldView.ActiveOrbitals.get(completed.CasterId);
 
-  const liveProjectile: import('../domain/projectile').LiveProjectile = {
-    Caster: completed.CasterId,
-    Target: baseTarget,
-    SkillId: completed.SkillId,
-    Info: skill.Delivery.projectile,
-  };
-  env.core.stateWrite.CreateProjectile(projectileId, liveProjectile, undefined);
+  if (orbitalConfig && activeOrbital) {
+    const orbitalCount = orbitalConfig.Count;
+    const totalTime = env.core.worldView.Time.TotalGameTime;
+    const elapsed = totalTime - activeOrbital.startTime;
+
+    // Get caster position for orbital origin
+    const casterPos = env.core.worldView.Positions.get(completed.CasterId);
+    if (!casterPos) {
+      console.error('[Combat] No caster position for orbital projectiles');
+      return;
+    }
+
+    // Find potential targets in the area (from F# line 956-1013)
+    const searchCtx = buildSearchContext(env, completed.CasterId);
+    let potentialTargets: EntityId[] = [];
+    
+    if (searchCtx) {
+      const baseTargetPos = resolveBaseTargetPos(env, completed);
+      if (baseTargetPos) {
+        potentialTargets = findTargetsForArea(
+          searchCtx,
+          completed.CasterId,
+          skill.Area,
+          baseTargetPos,
+          Math.max(skill.Area.maxTargets ?? 0, orbitalCount)
+        );
+      }
+    }
+
+    // Get caster facing rotation (F# OrbitalSystem.fs:161-163)
+    const casterRotation = env.core.worldView.Rotations.get(completed.CasterId) ?? 0;
+    const facingAngle = casterRotation; // Already in radians
+    const cosAngle = Math.cos(facingAngle);
+    const sinAngle = Math.sin(facingAngle);
+
+    // Spawn one projectile per orbital (F# line 1016-1070)
+    for (let i = 0; i < orbitalCount; i++) {
+      const projectileId = brandEntityId(crypto.randomUUID());
+
+      // Calculate orbital position (F# line 1021-1029)
+      const localOffset = calculateOrbitalPosition(orbitalConfig, elapsed, i);
+      
+      // Apply facing rotation to orbital position (F# OrbitalSystem.fs:169-172)
+      const rotatedX = localOffset.X * cosAngle - localOffset.Z * sinAngle;
+      const rotatedZ = localOffset.X * sinAngle + localOffset.Z * cosAngle;
+      
+      // Apply facing rotation to center offset
+      const centerOffsetX = (orbitalConfig.CenterOffset?.X ?? 0);
+      const centerOffsetZ = (orbitalConfig.CenterOffset?.Z ?? 0);
+      const rotatedCenterX = centerOffsetX * cosAngle - centerOffsetZ * sinAngle;
+      const rotatedCenterZ = centerOffsetX * sinAngle + centerOffsetZ * cosAngle;
+      
+      const spawnPos: WorldPosition = {
+        X: casterPos.X + rotatedCenterX + rotatedX,
+        Y: casterPos.Y + (orbitalConfig.CenterOffset?.Y ?? 0) + localOffset.Y,
+        Z: casterPos.Z + rotatedCenterZ + rotatedZ,
+      };
+
+      // Map to target if available, else random position in area (F# line 1041-1060)
+      let target: import('../domain/projectile').ProjectileTarget;
+      
+      if (i < potentialTargets.length) {
+        target = { kind: 'EntityTarget', entity: potentialTargets[i] };
+      } else {
+        // Random position in area (F# line 1051-1060)
+        const randomPos = getRandomPositionInArea(skill.Area, completed.Target, env.core.rng);
+        target = { kind: 'PositionTarget', position: randomPos };
+      }
+
+      const liveProjectile: import('../domain/projectile').LiveProjectile = {
+        Caster: completed.CasterId,
+        Target: target,
+        SkillId: completed.SkillId,
+        Info: skill.Delivery.projectile,
+      };
+
+      // Create projectile at orbital position (F# line 1068-1070)
+      env.core.stateWrite.CreateProjectile(projectileId, liveProjectile, spawnPos);
+    }
+  } else {
+    // Fallback to single projectile (existing logic)
+    const projectileId = brandEntityId(crypto.randomUUID());
+    const baseTarget: import('../domain/projectile').ProjectileTarget =
+      completed.Target.kind === 'TargetEntity'
+        ? { kind: 'EntityTarget', entity: completed.Target.entity }
+        : completed.Target.kind === 'TargetPosition'
+          ? { kind: 'PositionTarget', position: completed.Target.position }
+          : completed.Target.kind === 'TargetDirection'
+            ? { kind: 'PositionTarget', position: completed.Target.position }
+            : { kind: 'EntityTarget', entity: completed.CasterId };
+
+    const liveProjectile: import('../domain/projectile').LiveProjectile = {
+      Caster: completed.CasterId,
+      Target: baseTarget,
+      SkillId: completed.SkillId,
+      Info: skill.Delivery.projectile,
+    };
+    env.core.stateWrite.CreateProjectile(projectileId, liveProjectile, undefined);
+  }
 }
 
 // --- System Factory ---

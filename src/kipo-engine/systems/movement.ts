@@ -30,6 +30,16 @@ function publishMovementStateChanged(env: PomoEnvironment, entityId: EntityId, s
   });
 }
 
+function getMovementSpeed(env: PomoEnvironment, entityId: EntityId): number {
+  // F# Movement.fs uses DerivedStats.MS for speed
+  const derivedStats = env.gameplay.projections.calculateDerivedStats?.(
+    env.core.worldView,
+    env.stores.itemStore,
+    entityId
+  );
+  return derivedStats?.MS ?? 100; // Default to 100 if not available
+}
+
 function updateMovementTargets(env: PomoEnvironment) {
   const world = env.core.world;
 
@@ -49,8 +59,8 @@ function updateMovementTargets(env: PomoEnvironment) {
         } else {
           // Move towards target
           const dir = vector2Normalize({ X: target.X - pos.X, Y: target.Y - pos.Y });
-          // Speed from derived stats if available, else default 100
-          const speed = 100; // TODO: lookup derived stats MS
+          // Speed from derived stats (F# Movement.fs:34-35)
+          const speed = getMovementSpeed(env, entityId);
           const vel = { X: dir.X * speed, Y: 0, Z: dir.Y * speed };
           world.Velocities.set(entityId, vel);
         }
@@ -82,7 +92,8 @@ function updateMovementTargets(env: PomoEnvironment) {
           }
         } else {
           const dir = vector2Normalize({ X: target.X - pos.X, Y: target.Y - pos.Y });
-          const speed = 100; // TODO: lookup derived stats MS
+          // Speed from derived stats (F# Movement.fs:34-35)
+          const speed = getMovementSpeed(env, entityId);
           world.Velocities.set(entityId, { X: dir.X * speed, Y: 0, Z: dir.Y * speed });
         }
         break;

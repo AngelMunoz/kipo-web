@@ -228,11 +228,33 @@ const ProjectileInfoSchema = z.object({
 
 const OrbitalConfigSchema = z.object({
   Count: z.number().int(),
-  CenterOffset: z.object({ X: z.number(), Y: z.number(), Z: z.number() }),
-}).transform((raw): OrbitalConfig => ({
-  Count: raw.Count,
-  CenterOffset: { X: raw.CenterOffset.X, Y: raw.CenterOffset.Y, Z: raw.CenterOffset.Z },
-}));
+  Radius: z.number(),
+  CenterOffset: z.object({ X: z.number(), Y: z.number(), Z: z.number() }).optional().default({ X: 0, Y: 0, Z: 0 }),
+  RotationAxis: z.object({ X: z.number(), Y: z.number(), Z: z.number() }).optional().default({ X: 0, Y: 1, Z: 0 }),
+  PathScale: z.array(z.number()).optional().default([1, 1]),
+  StartSpeed: z.number(),
+  EndSpeed: z.number(),
+  Duration: z.number(),
+  Visual: VisualManifestSchema.optional(),
+}).transform((raw): OrbitalConfig => {
+  // PathScale is always an array [x, y] in JSON (F# Orbital.fs decoder)
+  const pathScaleArr = raw.PathScale;
+  const pathScale = pathScaleArr.length >= 2 
+    ? { X: pathScaleArr[0], Y: pathScaleArr[1] }
+    : { X: 1, Y: 1 };
+  
+  return {
+    Count: raw.Count,
+    Radius: raw.Radius,
+    CenterOffset: { X: raw.CenterOffset.X, Y: raw.CenterOffset.Y, Z: raw.CenterOffset.Z },
+    RotationAxis: { X: raw.RotationAxis.X, Y: raw.RotationAxis.Y, Z: raw.RotationAxis.Z },
+    PathScale: pathScale,
+    StartSpeed: raw.StartSpeed,
+    EndSpeed: raw.EndSpeed,
+    Duration: raw.Duration,
+    Visual: raw.Visual ?? { ModelId: undefined, VfxId: undefined, AnimationId: undefined, AttachmentPoint: undefined },
+  };
+});
 
 const ChargeConfigSchema = z.object({
   Duration: z.number(),

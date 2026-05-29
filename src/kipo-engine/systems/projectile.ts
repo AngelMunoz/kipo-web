@@ -3,7 +3,7 @@ import { brandEntityId } from '../types/branded';
 import type { PomoEnvironment } from './environment';
 import type { WorldPosition, Vector2 } from '../domain/core';
 import { toVector2, fromVector2, Vector3Zero, vector2Distance, vector2DistanceSquared } from '../domain/core';
-import type { LiveProjectile, ProjectileTarget } from '../domain/projectile';
+import type { LiveProjectile, ProjectileTarget, ExtraVariations } from '../domain/projectile';
 import type { ProjectileImpacted } from '../domain/events';
 
 // --- Helpers ---
@@ -20,6 +20,91 @@ function resolveTargetPosition(
     case 'PositionTarget':
       return fromVector2(target.position);
   }
+}
+
+// --- Descending Projectile Handler (ported from F# Projectile.fs:86-120) ---
+
+function processDescendingProjectile(
+  world: import('../domain/world').MutableWorld,
+  projectileId: EntityId,
+  projectile: LiveProjectile,
+  dt: number
+): ProjectileImpacted | undefined {
+  const variation = projectile.Info.Variations;
+  if (variation?.kind !== 'Descending') return undefined;
+
+  const { currentAltitude, fallSpeed } = variation;
+  const newAltitude = currentAltitude - (fallSpeed * dt);
+
+  if (newAltitude <= 0) {
+    // Impact! (F# line 97-98)
+    const targetPos = resolveTargetPosition(world, projectile.Target);
+    if (!targetPos) return undefined;
+
+    // Get base height for impact position
+    // Note: F# uses BlockCollision.getSurfaceHeight for precise ground lookup.
+    // In 2D port without BlockMap, we use target Y as ground level approximation.
+    let baseHeight = 0;
+    if (projectile.Target.kind === 'PositionTarget') {
+      baseHeight = targetPos.Y; // Use target Y as ground level
+    } else {
+      // For entity targets, use current Y as ground level approximation
+      const currentPos = world.Positions.get(projectileId);
+      if (currentPos) baseHeight = currentPos.Y - currentAltitude;
+    }
+
+    return {
+      ProjectileId: projectileId,
+      CasterId: projectile.Caster,
+      ImpactPosition: toVector2(targetPos),
+      TargetEntity: projectile.Target.kind === 'EntityTarget' ? projectile.Target.entity : undefined,
+      SkillId: projectile.SkillId,
+      RemainingJumps: undefined,
+    };
+  } else {
+    // Update projectile with new altitude (F# lines 101-117)
+    const currentPos = world.Positions.get(projectileId);
+    if (currentPos) {
+      // Calculate base height (ground level)
+      let baseHeight = 0;
+      if (projectile.Target.kind === 'PositionTarget') {
+        const targetPos = fromVector2(projectile.Target.position);
+        baseHeight = targetPos.Y;
+      } else {
+        baseHeight = currentPos.Y - currentAltitude;
+      }
+
+      // Update Y position to match altitude
+      const newPos: WorldPosition = {
+        X: currentPos.X,
+        Y: baseHeight + newAltitude,
+        Z: currentPos.Z,
+      };
+
+      // Remove and recreate with updated position (F# pattern)
+      world.Positions.delete(projectileId);
+      world.Positions.set(projectileId, newPos);
+
+      // Update projectile variation with new altitude
+      const updatedVariation: ExtraVariations = {
+        kind: 'Descending',
+        currentAltitude: newAltitude,
+        fallSpeed,
+      };
+
+      // Update projectile info
+      world.LiveProjectiles.delete(projectileId);
+      world.LiveProjectiles.set(projectileId, {
+        ...projectile,
+        Info: {
+          ...projectile.Info,
+          Variations: updatedVariation,
+        },
+      });
+    }
+  }
+
+  return undefined;
 }
 
 function findNextChainTarget(
@@ -126,7 +211,17 @@ export function updateProjectiles(
       continue;
     }
 
-    // Check if arrived
+    // Handle descending projectiles differently (F# Projectile.fs:285-301)
+    if (projectile.Info.Variations?.kind === 'Descending') {
+      const impact = processDescendingProjectile(world, projectileId, projectile, dt);
+      if (impact) {
+        impactsToPublish.push(impact);
+        projectilesToRemove.push(projectileId);
+      }
+      continue; // Skip normal horizontal movement
+    }
+
+    // Check if arrived (for horizontal/chained projectiles)
     const dist = vector2Distance(toVector2(projPos), toVector2(targetPos));
     const threshold = 16.0; // F#: Constants.Projectile.ArrivalThreshold = 16f
 

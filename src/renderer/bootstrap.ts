@@ -8,6 +8,7 @@ import { loadContent, type ContentStores } from '../kipo-engine/stores/content-s
 import { loadParticleStore, type ParticleStore } from './stores/particle-store';
 import { createGameplayLoop, type GameplayLoop } from '../kipo-engine/gameplay-loop';
 import { createMovementSystem } from '../kipo-engine/systems/movement';
+import { createCollisionSystem } from '../kipo-engine/systems/collision';
 import { createAbilityActivationSystem } from '../kipo-engine/systems/ability-activation';
 import { createTargetingSystem as createEngineTargetingSystem } from '../kipo-engine/systems/targeting';
 import { createProjectileSystem } from '../kipo-engine/systems/projectile';
@@ -100,6 +101,7 @@ export async function bootstrapGame(): Promise<GameBootstrap> {
     createEngineTargetingSystem(env);
 
     const movement = createMovementSystem(env);
+    const collision = createCollisionSystem(env);
     const projectile = createProjectileSystem(env);
     const notification = createNotificationSystem(env);
     const resourceManager = createResourceManagerSystem(env);
@@ -136,6 +138,7 @@ export async function bootstrapGame(): Promise<GameBootstrap> {
         effectApp,
         projectile,
         movement,
+        collision,
         ai: aiSystem,
         resourceManager,
         inventory: inventorySystem,

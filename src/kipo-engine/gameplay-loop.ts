@@ -2,6 +2,7 @@ import type { GameSystem, PomoEnvironment } from "./systems/environment";
 import type { EffectApplicationSystem } from "./systems/effect-application";
 import type { ProjectileSystem } from "./systems/projectile";
 import type { MovementSystem } from "./systems/movement";
+import type { CollisionSystem } from "./systems/collision";
 import type { AISystem } from "./systems/ai-system";
 import type { ResourceManagerSystem } from "./systems/resource-manager";
 import type { InventorySystem } from "./systems/inventory";
@@ -14,7 +15,16 @@ import type { IStateWriteService } from "./systems/state-write";
 
 function processChargeExpiry(world: MutableWorld, totalTime: number, stateWrite: IStateWriteService, eventBus: import("./events/event-bus").EventBus) {
   for (const [casterId, charge] of world.ActiveCharges) {
-    if (totalTime - charge.startTime >= charge.Duration) {
+    // Check entity still exists (from F# OrbitalSystem.fs)
+    if (!world.EntityExists.has(casterId)) {
+      stateWrite.RemoveActiveCharge(casterId);
+      stateWrite.RemoveActiveOrbital(casterId);
+      continue;
+    }
+
+    const chargeElapsed = totalTime - charge.startTime;
+    if (chargeElapsed >= charge.Duration) {
+      // Publish ChargeCompleted event (matches F# OrbitalSystem.fs:73-82)
       eventBus.publish({
         kind: 'Lifecycle',
         lifecycle: {
@@ -26,6 +36,8 @@ function processChargeExpiry(world: MutableWorld, totalTime: number, stateWrite:
           },
         },
       });
+
+      // Cleanup charge and orbital (matches F# OrbitalSystem.fs:84-85)
       stateWrite.RemoveActiveCharge(casterId);
       stateWrite.RemoveActiveOrbital(casterId);
     }
@@ -49,6 +61,7 @@ export function createGameplayLoop(
     effectApp: EffectApplicationSystem;
     projectile: ProjectileSystem;
     movement: MovementSystem;
+    collision: CollisionSystem;
     ai: AISystem;
     resourceManager: ResourceManagerSystem;
     inventory: InventorySystem;
@@ -84,6 +97,7 @@ export function createGameplayLoop(
       systems.projectile.update(dt);
       processChargeExpiry(world, previous + dt, env.core.stateWrite, env.core.eventBus);
       systems.movement.update(dt);
+      systems.collision.update();  // After movement, detect collisions
       systems.ai.update();
       systems.entitySpawner.update();
       systems.effectApp.update(world, previous + dt, previous);
@@ -111,6 +125,7 @@ export function createGameplayLoop(
       systems.effectApp.dispose?.();
       systems.projectile.dispose?.();
       systems.movement.dispose?.();
+      systems.collision.dispose?.();
       systems.ai.dispose?.();
       systems.resourceManager.dispose?.();
       systems.inventory.dispose?.();

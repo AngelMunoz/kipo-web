@@ -21,6 +21,7 @@ function log(...args: unknown[]) {
 export interface TargetingSystem {
   update(): void;
   dispose(): void;
+  getTargetingMode(entityId: EntityId): ActiveSkill | undefined;
 }
 
 interface TargetingState {
@@ -85,6 +86,30 @@ export function createTargetingSystem(env: PomoEnvironment): TargetingSystem {
 
       if (slotProcessing.kind === "Item") {
         log("  slotProcessing is Item:", slotProcessing.itemInstanceId);
+        
+        // Validate item has uses left (F# AbilityActivation.fs:562-568)
+        const itemInstance = worldView.ItemInstances.get(slotProcessing.itemInstanceId);
+        if (!itemInstance) {
+          log("  item instance not found");
+          return;
+        }
+        
+        if (itemInstance.UsesLeft !== undefined && itemInstance.UsesLeft <= 0) {
+          log("  item has no uses left");
+          eventBus.publish({
+            kind: "Notification",
+            notification: {
+              kind: "ShowMessage",
+              message: {
+                Message: "Item has no uses left!",
+                Position: worldView.Positions.get(CasterId) ?? { X: 0, Y: 0, Z: 0 },
+                Type: "Crit",
+              },
+            },
+          });
+          return;
+        }
+        
         eventBus.publish({
           kind: "ItemIntent",
           itemIntent: {
@@ -296,12 +321,55 @@ export function createTargetingSystem(env: PomoEnvironment): TargetingSystem {
 
   subscriptions.push(cancelSub);
 
+  // Subscribe to RawInput for Escape/Right-click cancel (F# Targeting.fs:52-64)
+  const rawInputSub = eventBus.events$
+    .pipe(
+      filter(
+        (e): e is GameEvent =>
+          e.kind === "State" && e.state.kind === "Input" && e.state.event.kind === "RawStateChanged",
+      ),
+    )
+    .subscribe((e) => {
+      if (e.kind !== "State" || e.state.kind !== "Input" || e.state.event.kind !== "RawStateChanged") return;
+      
+      const { entityId, state: rawInput } = e.state.event;
+      
+      // Only process if entity has active targeting
+      if (!activeTargeting.has(entityId)) return;
+      
+      // Check for Escape key press (F# line 56-58)
+      const isEscapePressed = rawInput.Keyboard.IsKeyDown("Escape") && 
+                             rawInput.PrevKeyboard.IsKeyUp("Escape");
+      
+      // Check for Right-click (F# line 60-62)
+      const isRightMouseClicked = rawInput.Mouse.RightButton === "Pressed" && 
+                                 rawInput.PrevMouse.RightButton === "Released";
+      
+      if (isEscapePressed || isRightMouseClicked) {
+        log("Escape/Right-click cancel targeting for", entityId);
+        activeTargeting.delete(entityId);
+        // Publish SlotActivated Cancel event (F# line 63)
+        eventBus.publish({
+          kind: "Intent",
+          intent: {
+            kind: "SlotActivated",
+            slot: { Slot: "Cancel", CasterId: entityId },
+          },
+        });
+      }
+    });
+
+  subscriptions.push(rawInputSub);
+
   return {
     update() {
       // Event-driven; all work done via subscriptions
     },
     dispose() {
       for (const sub of subscriptions) sub.unsubscribe();
+    },
+    getTargetingMode(entityId: EntityId) {
+      return activeTargeting.get(entityId)?.skill;
     },
   };
 }
